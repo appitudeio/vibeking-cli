@@ -61,18 +61,17 @@ export async function runDefault(opts: {
 
   let cfg = await readConfig();
   const authed = !!cfg.token && tokenMatchesHost(cfg);
+  const needsConsent = !cfg.autoPublish;
 
-  // Non-TTY (CI, piped stdin): we can't run an interactive login or prompt.
-  // Only proceed silently if the user already has both a valid token AND
-  // persisted `autoPublish: true`.
-  if (!process.stdin.isTTY && (!authed || !cfg.autoPublish)) {
+  // Non-TTY (CI, piped stdin) can't run an interactive login or prompt.
+  if (!process.stdin.isTTY && (!authed || needsConsent)) {
     process.stdout.write(
       `  ${pc.dim("Run")} ${pc.bold("vibeking publish")} ${pc.dim("to upload, or")} ${pc.bold("vibeking scan")} ${pc.dim("to scan only.")}\n\n`
     );
     return;
   }
 
-  if (!cfg.autoPublish) {
+  if (needsConsent) {
     const question = authed
       ? "Publish to vibeking.io?"
       : "Sign in with GitHub and publish to vibeking.io?";
@@ -82,17 +81,14 @@ export async function runDefault(opts: {
   }
 
   if (!authed) {
-    // If login throws (timeout, oauth declined, network), the exception
+    // If runLogin throws (timeout, oauth declined, network), the exception
     // propagates and the consent flag below never gets written. Re-running
     // bare `vibeking` will prompt again — exactly what we want.
     await runLogin({ open: opts.open });
     cfg = await readConfig();
   }
 
-  // Persist consent only after we actually have a usable token. Done last so
-  // partial failures upstream can't strand the user with autoPublish=true
-  // but no auth.
-  if (!cfg.autoPublish) {
+  if (needsConsent) {
     await writeConfig({ ...cfg, autoPublish: true });
   }
 
