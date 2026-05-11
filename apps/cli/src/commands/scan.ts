@@ -6,8 +6,8 @@ import {
   type ScanSummary,
 } from "@vibeking/core";
 import pc from "picocolors";
-import { scanClaudeCode } from "../scanners/claudeCode.js";
-import { renderReveal, renderEmptyState } from "../reveal/terminal.js";
+import { scanClaudeCode } from "../scanner.js";
+import { renderReveal, renderEmptyState } from "../reveal.js";
 import { pickTopModel } from "../util/topModel.js";
 
 export type ScanOptions = {

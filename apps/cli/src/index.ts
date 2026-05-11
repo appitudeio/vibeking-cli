@@ -2,14 +2,14 @@
 import { runScan } from "./commands/scan.js";
 import { runInspectUpload } from "./commands/inspectUpload.js";
 import { runHelp } from "./commands/help.js";
-import { runLogin } from "./commands/login.js";
-import { runLogout } from "./commands/logout.js";
-import { runWhoami } from "./commands/whoami.js";
+import { runLogin, runLogout, runWhoami } from "./commands/auth.js";
 import { runPublish } from "./commands/publish.js";
-import { runCreateLeague } from "./commands/createLeague.js";
-import { runJoinLeague } from "./commands/joinLeague.js";
-import { runListLeagues } from "./commands/listLeagues.js";
-import { runLeaveLeague } from "./commands/leaveLeague.js";
+import {
+  runCreateLeague,
+  runJoinLeague,
+  runLeaveLeague,
+  runListLeagues,
+} from "./commands/leagues.js";
 
 type Command =
   | "scan"
