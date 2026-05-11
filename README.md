@@ -15,34 +15,20 @@ npx vibeking
 ```
 
 ```
-       __||__
-       \\____//
-        ('o')
-       (\___/)
-        \___/
+  vibeking  weekly scan complete
 
-   VibeKing   weekly scan complete
+  Tokens         2.04B
+  Sessions       100
+  Active days    7
+  Main weapon    claude-opus-4-7 (79%)
 
-  ───────────────────────────────────────────────────────────
+  Looks like: Rate Limit Royalty
 
-  VibeBurn        2.04B tokens
-  VibeScore       11,685
-  Level           8
-
-  Title
-   Rate Limit Royalty   anthropic dms you on holidays
-
-  Sessions        100
-  Active days     7
-  Main weapon     claude-opus-4-7 (79%)
-
-  Badges
-    ✓ 7-day streak
-    ✓ cache goblin
-    ✓ model omnivore
-    ✓ 100 sessions
-    ✓ billion-token club
+  Publish to see your official rank, roast, card, and leagues:
+    vibeking publish
 ```
+
+The offline reveal is intentionally a teaser. The official VibeScore, level, badges, roast, and share card are computed server-side and shown after `vibeking publish`.
 
 `vibeking login` + `vibeking publish` to claim a public rank at [vibeking.io](https://vibeking.io).
 
@@ -64,7 +50,7 @@ The whole pitch hinges on three things:
 
 1. **The scanner is right here.** [`apps/cli/src/scanners/claudeCode.ts`](./apps/cli/src/scanners/claudeCode.ts) is short enough to read in five minutes. It reads `~/.claude/projects/*/memory.jsonl`, pulls timestamps + model names + token counts, and that's it.
 2. **The payload builder is shared.** [`apps/cli/src/util/buildPayload.ts`](./apps/cli/src/util/buildPayload.ts) is the one function that turns local data into something uploadable. Both `vibeking publish` and `vibeking inspect-upload` call it — they cannot drift.
-3. **The schema is `.strict()`-enforced.** [`packages/core/src/redaction.ts`](./packages/core/src/redaction.ts) defines `UploadPayloadSchema` with Zod `.strict()` — any unknown key throws before the request leaves your machine. The [redaction tests](./packages/core/src/__tests__/redaction.test.ts) cover prompt/path-shaped leaks specifically.
+3. **The schema is `strictObject`-enforced.** [`packages/core/src/redaction.ts`](./packages/core/src/redaction.ts) defines `UploadPayloadSchema` with Valibot `v.strictObject` — any unknown key throws before the request leaves your machine. The [redaction tests](./packages/core/src/__tests__/redaction.test.ts) cover prompt/path-shaped leaks specifically.
 
 ## Develop
 

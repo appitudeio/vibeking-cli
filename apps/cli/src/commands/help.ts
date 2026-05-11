@@ -10,7 +10,7 @@ export function runHelp(): void {
       `  ${c.dim("the leaderboard for vibe coders")}`,
       "",
       `  ${c.bold("usage")}`,
-      `    npx vibeking                ${c.dim("scan + reveal + write local card (default)")}`,
+      `    npx vibeking                ${c.dim("scan + reveal (default)")}`,
       `    npx vibeking scan           ${c.dim("alias of the default")}`,
       `    npx vibeking scan --monthly ${c.dim("score over the last 30 days")}`,
       `    npx vibeking scan --all     ${c.dim("score over all-time data")}`,
