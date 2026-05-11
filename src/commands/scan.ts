@@ -1,11 +1,17 @@
 import pc from "picocolors";
+import type { Scope } from "../core/types.js";
 import { scanClaudeCode } from "../scanner.js";
 import { renderReveal, renderEmptyState } from "../reveal.js";
 import { pickTopModel } from "../util/topModel.js";
 
 export type ScanOptions = {
-  scope?: "weekly" | "monthly" | "all_time";
+  scope?: Scope;
 };
+
+// Cache reads are billed at ~10% of write tokens on the Anthropic API, so a
+// straight sum would over-credit cache-heavy days. The 0.1 weight keeps the
+// "tokens burned" headline aligned with API-equivalent cost.
+const CACHE_READ_WEIGHT = 0.1;
 
 export async function runScan(opts: ScanOptions = {}): Promise<void> {
   const scope = opts.scope ?? "weekly";
@@ -19,14 +25,16 @@ export async function runScan(opts: ScanOptions = {}): Promise<void> {
   }
 
   const cutoff = scopeCutoff(scope);
-  const inRange = summary.daily.filter((d) => d.date >= cutoff);
+  const inRange = cutoff
+    ? summary.daily.filter((d) => d.date >= cutoff)
+    : summary.daily;
   const totals = inRange.reduce(
     (acc, d) => {
       acc.tokens +=
         d.inputTokens +
         d.outputTokens +
         d.cacheWriteTokens +
-        Math.floor(d.cacheReadTokens * 0.1);
+        Math.floor(d.cacheReadTokens * CACHE_READ_WEIGHT);
       acc.sessions += d.sessions;
       return acc;
     },
@@ -50,8 +58,8 @@ export async function runScan(opts: ScanOptions = {}): Promise<void> {
   );
 }
 
-function scopeCutoff(scope: NonNullable<ScanOptions["scope"]>): string {
-  if (scope === "all_time") return "0000-00-00";
+function scopeCutoff(scope: Scope): string | null {
+  if (scope === "all_time") return null;
   const today = new Date();
   today.setUTCHours(0, 0, 0, 0);
   const daysBack = scope === "weekly" ? 6 : 29;

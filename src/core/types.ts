@@ -1,5 +1,7 @@
 export type SourceType = "claude_code";
 
+export type Scope = "weekly" | "monthly" | "all_time";
+
 export type DailyAggregate = {
   source: SourceType;
   date: string;

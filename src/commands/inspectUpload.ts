@@ -2,17 +2,14 @@ import pc from "picocolors";
 import { buildPayloadFromScanOrExit } from "../util/buildPayload.js";
 
 export async function runInspectUpload(): Promise<void> {
-  const c = pc;
   process.stdout.write(
     [
       "",
-      `  ${c.bold(c.black(c.bgYellow(" inspect-upload ")))}  ${c.dim("the exact JSON that would be sent")}`,
+      `  ${pc.bold(pc.black(pc.bgYellow(" inspect-upload ")))}  ${pc.dim("the exact JSON that would be sent")}`,
       "",
     ].join("\n") + "\n"
   );
 
-  // Shares buildPayloadFromScanOrExit with `publish` — what prints here
-  // is structurally identical to what publish POSTs (whitespace aside).
   const payload = await buildPayloadFromScanOrExit({
     heading: "payload would fail server-side validation",
   });
@@ -20,6 +17,6 @@ export async function runInspectUpload(): Promise<void> {
 
   process.stdout.write(JSON.stringify(payload, null, 2) + "\n\n");
   process.stdout.write(
-    `  ${c.green("✓")} ${c.dim("only token counts, dates, model breakdowns. no prompts, code, or paths.")}\n\n`
+    `  ${pc.green("✓")} ${pc.dim("only token counts, dates, model breakdowns. no prompts, code, or paths.")}\n\n`
   );
 }

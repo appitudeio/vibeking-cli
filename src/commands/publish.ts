@@ -1,28 +1,25 @@
 import pc from "picocolors";
-import { requireAuthedConfig } from "../util/requireAuth.js";
+import { isAuthRejection, requireAuthedConfig } from "../util/requireAuth.js";
 import { buildPayloadFromScanOrExit } from "../util/buildPayload.js";
 
 export async function runPublish(): Promise<void> {
-  const c = pc;
   const cfg = await requireAuthedConfig();
   if (!cfg) return;
 
-  // Shared with `inspect-upload` — same payload, same validation, same
-  // ZodError UX. The two commands cannot drift.
   const payload = await buildPayloadFromScanOrExit({
     heading: "local data would fail server-side validation",
   });
   if (!payload) return;
   if (payload.daily.length === 0) {
     process.stdout.write(
-      `\n  ${c.red("✕")} no Claude Code sessions found in ~/.claude/projects.\n\n`
+      `\n  ${pc.red("✕")} no Claude Code sessions found in ~/.claude/projects.\n\n`
     );
     process.exitCode = 1;
     return;
   }
 
   process.stdout.write(
-    `\n  ${c.dim("uploading")}  ${payload.daily.length} day(s) of aggregates  ${c.dim("→")} ${cfg.apiUrl}\n`
+    `\n  ${pc.dim("uploading")}  ${payload.daily.length} day(s) of aggregates  ${pc.dim("→")} ${cfg.apiUrl}\n`
   );
 
   const res = await fetch(`${cfg.apiUrl}/v1/scan`, {
@@ -34,17 +31,11 @@ export async function runPublish(): Promise<void> {
     body: JSON.stringify(payload),
   });
 
-  if (res.status === 401) {
-    process.stdout.write(
-      `\n  ${c.red("✕")} token rejected. run ${c.bold("vibeking login")} again.\n\n`
-    );
-    process.exitCode = 1;
-    return;
-  }
+  if (isAuthRejection(res)) return;
   if (!res.ok) {
     const text = await res.text().catch(() => "");
     process.stdout.write(
-      `\n  ${c.red("✕")} publish failed (HTTP ${res.status})\n  ${c.dim(text.slice(0, 500))}\n\n`
+      `\n  ${pc.red("✕")} publish failed (HTTP ${res.status})\n  ${pc.dim(text.slice(0, 500))}\n\n`
     );
     process.exitCode = 1;
     return;
@@ -67,10 +58,10 @@ export async function runPublish(): Promise<void> {
   const profileUrl = `${cfg.webUrl}/u/${handle}`;
 
   process.stdout.write(
-    `  ${c.green("✓")} ${c.bold("published")}\n\n` +
-      `  ${c.dim("title")}      ${c.bold(c.white(c.bgMagenta(` ${body.score.title} `)))} ${c.dim(c.italic(body.score.flair))}\n` +
-      `  ${c.dim("score")}      ${c.bold(c.cyan(body.score.vibeScore.toLocaleString()))}\n` +
-      `  ${c.dim("level")}      ${c.bold(c.magenta(String(body.score.level)))}\n` +
-      `  ${c.dim("profile")}    ${c.cyan(profileUrl)}\n\n`
+    `  ${pc.green("✓")} ${pc.bold("published")}\n\n` +
+      `  ${pc.dim("title")}      ${pc.bold(pc.white(pc.bgMagenta(` ${body.score.title} `)))} ${pc.dim(pc.italic(body.score.flair))}\n` +
+      `  ${pc.dim("score")}      ${pc.bold(pc.cyan(body.score.vibeScore.toLocaleString()))}\n` +
+      `  ${pc.dim("level")}      ${pc.bold(pc.magenta(String(body.score.level)))}\n` +
+      `  ${pc.dim("profile")}    ${pc.cyan(profileUrl)}\n\n`
   );
 }

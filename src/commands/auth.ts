@@ -1,21 +1,18 @@
 import pc from "picocolors";
 import { clearAuth, readConfig, writeConfig } from "../util/config.js";
 import { openUrl } from "../util/openUrl.js";
-import { requireAuthedConfig } from "../util/requireAuth.js";
-
-const c = pc;
+import { isAuthRejection, requireAuthedConfig } from "../util/requireAuth.js";
 
 const POLL_INTERVAL_MS = 2000;
-const POLL_MAX_MS = 10 * 60_000; // 10 minutes — matches server TTL
+const POLL_MAX_MS = 10 * 60_000; // matches the server's device-code TTL
 
 export async function runLogin(opts: { open?: boolean } = {}): Promise<void> {
   const cfg = await readConfig();
 
   process.stdout.write(
-    `\n  ${c.bold(c.black(c.bgYellow(" vibeking login ")))}  ${c.dim("github oauth via " + cfg.webUrl)}\n\n`
+    `\n  ${pc.bold(pc.black(pc.bgYellow(" vibeking login ")))}  ${pc.dim("github oauth via " + cfg.webUrl)}\n\n`
   );
 
-  // 1) Ask the API for a code.
   const startRes = await fetch(`${cfg.apiUrl}/v1/cli/start`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -32,21 +29,20 @@ export async function runLogin(opts: { open?: boolean } = {}): Promise<void> {
   };
 
   process.stdout.write(
-    `  ${c.dim("verify code")}    ${c.bold(userCode)}\n` +
-      `  ${c.dim("verify url")}     ${c.cyan(verifyUrl)}\n` +
-      `  ${c.dim("expires at")}     ${new Date(expiresAt).toLocaleTimeString()}\n\n` +
-      `  ${c.dim("opening your browser...")}\n\n`
+    `  ${pc.dim("verify code")}    ${pc.bold(userCode)}\n` +
+      `  ${pc.dim("verify url")}     ${pc.cyan(verifyUrl)}\n` +
+      `  ${pc.dim("expires at")}     ${new Date(expiresAt).toLocaleTimeString()}\n\n` +
+      `  ${pc.dim("opening your browser...")}\n\n`
   );
 
   if (opts.open !== false) {
     try {
       await openUrl(verifyUrl);
     } catch {
-      // continue anyway — user can paste the URL manually
+      // user can paste the URL manually
     }
   }
 
-  // 2) Poll for approval.
   const startedAt = Date.now();
   let dotCount = 0;
   while (Date.now() - startedAt < POLL_MAX_MS) {
@@ -62,7 +58,6 @@ export async function runLogin(opts: { open?: boolean } = {}): Promise<void> {
       throw new Error(`login request expired or invalid (${pollRes.status})`);
     }
     if (!pollRes.ok) {
-      // transient — keep trying
       continue;
     }
 
@@ -73,7 +68,7 @@ export async function runLogin(opts: { open?: boolean } = {}): Promise<void> {
     if (result.status === "pending") {
       dotCount = (dotCount + 1) % 4;
       process.stdout.write(
-        `\r  ${c.dim("waiting for approval" + ".".repeat(dotCount).padEnd(3))}`
+        `\r  ${pc.dim("waiting for approval" + ".".repeat(dotCount).padEnd(3))}`
       );
       continue;
     }
@@ -87,7 +82,7 @@ export async function runLogin(opts: { open?: boolean } = {}): Promise<void> {
     });
 
     process.stdout.write(
-      `  ${c.green("✓")} ${c.bold("logged in")}  ${c.dim("(token saved to ~/.vibeking/config.json)")}\n\n`
+      `  ${pc.green("✓")} ${pc.bold("logged in")}  ${pc.dim("(token saved to ~/.vibeking/config.json)")}\n\n`
     );
     return;
   }
@@ -98,7 +93,7 @@ export async function runLogin(opts: { open?: boolean } = {}): Promise<void> {
 export async function runLogout(): Promise<void> {
   await clearAuth();
   process.stdout.write(
-    `\n  ${c.green("✓")} ${c.bold("logged out")}  ${c.dim("(token removed)")}\n\n`
+    `\n  ${pc.green("✓")} ${pc.bold("logged out")}  ${pc.dim("(token removed)")}\n\n`
   );
 }
 
@@ -106,23 +101,15 @@ export async function runWhoami(): Promise<void> {
   const cfg = await requireAuthedConfig();
   if (!cfg) return;
 
-  // Look up our identity from the server. The token alone doesn't tell us
-  // the handle/email; we ask the API.
   const res = await fetch(`${cfg.apiUrl}/v1/whoami`, {
     headers: { authorization: `Bearer ${cfg.token}` },
   });
 
-  if (res.status === 401) {
-    process.stdout.write(
-      `\n  ${c.red("✕")} token rejected. run ${c.bold("vibeking login")} again.\n\n`
-    );
-    process.exitCode = 1;
-    return;
-  }
+  if (isAuthRejection(res)) return;
 
   if (!res.ok) {
     process.stdout.write(
-      `\n  ${c.red("✕")} whoami failed (HTTP ${res.status})\n\n`
+      `\n  ${pc.red("✕")} whoami failed (HTTP ${res.status})\n\n`
     );
     process.exitCode = 1;
     return;
@@ -134,11 +121,11 @@ export async function runWhoami(): Promise<void> {
   };
 
   process.stdout.write(
-    `\n  ${c.dim("user id")}   ${body.user.id}\n` +
-      `  ${c.dim("handle")}    ${c.bold(body.user.handle ?? "(not set)")}\n` +
-      `  ${c.dim("name")}      ${body.user.name}\n` +
-      `  ${c.dim("country")}   ${body.user.country ?? "(not set)"}\n` +
-      `  ${c.dim("api")}       ${cfg.apiUrl}\n\n`
+    `\n  ${pc.dim("user id")}   ${body.user.id}\n` +
+      `  ${pc.dim("handle")}    ${pc.bold(body.user.handle ?? "(not set)")}\n` +
+      `  ${pc.dim("name")}      ${body.user.name}\n` +
+      `  ${pc.dim("country")}   ${body.user.country ?? "(not set)"}\n` +
+      `  ${pc.dim("api")}       ${cfg.apiUrl}\n\n`
   );
 }
 

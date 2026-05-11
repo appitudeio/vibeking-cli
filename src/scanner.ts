@@ -1,5 +1,5 @@
 import { readdir } from "node:fs/promises";
-import { createReadStream, existsSync } from "node:fs";
+import { createReadStream } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { createInterface } from "node:readline";
@@ -7,6 +7,17 @@ import { isIsoDate } from "./core/dateUtils.js";
 import type { DailyAggregate, ScanSummary } from "./core/types.js";
 
 const CLAUDE_PROJECTS_DIR = join(homedir(), ".claude", "projects");
+
+// Bounded parallelism for parseFile. JS is single-threaded so the per-line
+// Map mutations are safe; we just want to avoid blowing through the OS file-
+// descriptor limit on users with hundreds of project JSONLs.
+const FILE_CONCURRENCY = 8;
+
+// The upload payload schema caps `daily` at 366 entries (see redaction.ts).
+// Trim before returning so a multi-year user's `publish` doesn't silently
+// fail validation; they get the most recent year, which is what matters for
+// rank anyway.
+const MAX_DAILY_ENTRIES = 366;
 
 type AssistantRecord = {
   type: "assistant";
@@ -32,20 +43,18 @@ export function scanClaudeCode(): Promise<ScanSummary> {
  * based payload snapshot test; not part of the public CLI surface.
  */
 export async function scanClaudeCodeDir(rootDir: string): Promise<ScanSummary> {
-  if (!existsSync(rootDir)) {
-    return emptySummary();
-  }
-
   const files = await collectJsonlFiles(rootDir);
   const byDate = new Map<string, MutableDay>();
 
-  for (const file of files) {
-    await parseFile(file, byDate);
+  for (let i = 0; i < files.length; i += FILE_CONCURRENCY) {
+    const batch = files.slice(i, i + FILE_CONCURRENCY);
+    await Promise.all(batch.map((f) => parseFile(f, byDate)));
   }
 
   const daily = Array.from(byDate.values())
     .map(finalizeDay)
-    .sort((a, b) => (a.date < b.date ? -1 : 1));
+    .sort((a, b) => (a.date < b.date ? -1 : 1))
+    .slice(-MAX_DAILY_ENTRIES);
 
   if (daily.length === 0) return emptySummary();
 

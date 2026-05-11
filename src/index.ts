@@ -4,6 +4,7 @@ import { runInspectUpload } from "./commands/inspectUpload.js";
 import { runHelp } from "./commands/help.js";
 import { runLogin, runLogout, runWhoami } from "./commands/auth.js";
 import { runPublish } from "./commands/publish.js";
+import type { Scope } from "./core/types.js";
 
 type Command =
   | "scan"
@@ -16,14 +17,14 @@ type Command =
 
 type ParsedArgs = {
   command: Command;
-  scope: "weekly" | "monthly" | "all_time";
+  scope: Scope;
   open: boolean;
 };
 
 function parseArgs(argv: string[]): ParsedArgs {
   const args = argv.slice(2);
   let command: Command = "scan";
-  let scope: "weekly" | "monthly" | "all_time" = "weekly";
+  let scope: Scope = "weekly";
 
   const first = args[0];
   if (first && !first.startsWith("-")) {

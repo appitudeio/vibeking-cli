@@ -12,12 +12,11 @@ import { readConfig, tokenMatchesHost, type CliConfig } from "./config.js";
  *     var or default flip; refuse to leak the bearer to the new host)
  */
 export async function requireAuthedConfig(): Promise<CliConfig | null> {
-  const c = pc;
   const cfg = await readConfig();
 
   if (!cfg.token) {
     process.stdout.write(
-      `\n  ${c.red("✕")} not logged in. run ${c.bold("vibeking login")} first.\n\n`
+      `\n  ${pc.red("✕")} not logged in. run ${pc.bold("vibeking login")} first.\n\n`
     );
     process.exitCode = 1;
     return null;
@@ -25,12 +24,28 @@ export async function requireAuthedConfig(): Promise<CliConfig | null> {
 
   if (!tokenMatchesHost(cfg)) {
     process.stdout.write(
-      `\n  ${c.red("✕")} token was issued for ${c.bold(cfg.tokenHost ?? "<unknown>")} but the CLI is currently configured for ${c.bold(cfg.apiUrl)}.\n` +
-        `    refusing to send the token to a different host. run ${c.bold("vibeking login")} to re-authenticate against ${c.bold(cfg.apiUrl)}.\n\n`
+      `\n  ${pc.red("✕")} token was issued for ${pc.bold(cfg.tokenHost ?? "<unknown>")} but the CLI is currently configured for ${pc.bold(cfg.apiUrl)}.\n` +
+        `    refusing to send the token to a different host. run ${pc.bold("vibeking login")} to re-authenticate against ${pc.bold(cfg.apiUrl)}.\n\n`
     );
     process.exitCode = 1;
     return null;
   }
 
   return cfg;
+}
+
+/**
+ * Detects server-side rejection of an authenticated request. When it
+ * returns true, the message is already printed and `process.exitCode` is
+ * set — the caller should `return` immediately.
+ */
+export function isAuthRejection(res: Response): boolean {
+  if (res.status === 401) {
+    process.stdout.write(
+      `\n  ${pc.red("✕")} token rejected. run ${pc.bold("vibeking login")} again.\n\n`
+    );
+    process.exitCode = 1;
+    return true;
+  }
+  return false;
 }
