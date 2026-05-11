@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { runScan } from "./commands/scan.js";
+import { runDefault } from "./commands/default.js";
 import { runInspectUpload } from "./commands/inspectUpload.js";
 import { runHelp } from "./commands/help.js";
 import { runLogin, runLogout, runWhoami } from "./commands/auth.js";
@@ -7,6 +8,7 @@ import { runPublish } from "./commands/publish.js";
 import type { Scope } from "./core/types.js";
 
 type Command =
+  | "default"
   | "scan"
   | "inspect-upload"
   | "help"
@@ -23,7 +25,7 @@ type ParsedArgs = {
 
 function parseArgs(argv: string[]): ParsedArgs {
   const args = argv.slice(2);
-  let command: Command = "scan";
+  let command: Command = "default";
   let scope: Scope = "weekly";
 
   const first = args[0];
@@ -35,7 +37,7 @@ function parseArgs(argv: string[]): ParsedArgs {
     else if (first === "logout") command = "logout";
     else if (first === "whoami") command = "whoami";
     else if (first === "publish") command = "publish";
-    else command = "scan";
+    else command = "default";
   } else if (args.includes("--help") || args.includes("-h")) {
     command = "help";
   }
@@ -51,6 +53,9 @@ async function main(): Promise<void> {
   const { command, scope, open } = parseArgs(process.argv);
 
   switch (command) {
+    case "default":
+      await runDefault({ scope, open });
+      return;
     case "scan":
       await runScan({ scope });
       return;

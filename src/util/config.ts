@@ -13,6 +13,12 @@ export type CliConfig = {
   tokenHost?: string;
   userId?: string;
   handle?: string;
+  /**
+   * Set to true after the user confirms the first-run "Publish to vibeking.io?"
+   * prompt. Subsequent bare `vibeking` invocations publish silently. Cleared
+   * by `vibeking logout` (logout = full consent reset).
+   */
+  autoPublish?: boolean;
 };
 
 const CONFIG_PATH = join(homedir(), ".vibeking", "config.json");
@@ -36,6 +42,7 @@ type PersistedConfig = {
   tokenHost?: string;
   userId?: string;
   handle?: string;
+  autoPublish?: boolean;
 };
 
 export async function readConfig(): Promise<CliConfig> {
@@ -56,6 +63,7 @@ export async function writeConfig(cfg: CliConfig): Promise<void> {
     tokenHost: cfg.tokenHost,
     userId: cfg.userId,
     handle: cfg.handle,
+    autoPublish: cfg.autoPublish,
   };
   await writeFile(CONFIG_PATH, JSON.stringify(persisted, null, 2), {
     mode: 0o600,
@@ -68,6 +76,7 @@ export async function clearAuth(): Promise<void> {
   delete cfg.tokenHost;
   delete cfg.userId;
   delete cfg.handle;
+  delete cfg.autoPublish;
   await writeConfig(cfg);
 }
 

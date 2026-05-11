@@ -1,7 +1,7 @@
 import pc from "picocolors";
-import type { Scope } from "../core/types.js";
+import type { Scope, ScanSummary } from "../core/types.js";
 import { scanClaudeCode } from "../scanner.js";
-import { renderReveal, renderEmptyState } from "../reveal.js";
+import { renderReveal, renderEmptyState, type RevealInput } from "../reveal.js";
 import { pickTopModel } from "../util/topModel.js";
 
 export type ScanOptions = {
@@ -24,6 +24,20 @@ export async function runScan(opts: ScanOptions = {}): Promise<void> {
     return;
   }
 
+  process.stdout.write(renderReveal(computeRevealInput(summary, scope)));
+
+  process.stdout.write(
+    `  ${pc.dim("Publish to see your title, rank, roast, card, and leagues:")}\n` +
+      `    ${pc.bold("vibeking publish")}\n\n` +
+      `  ${pc.dim("inspect upload")}  ${pc.bold("vibeking inspect-upload")}  ${pc.dim("(see exactly what would be sent)")}\n\n`
+  );
+}
+
+/**
+ * Reduce a ScanSummary to the facts shown in the reveal. Shared by `runScan`
+ * and the bare `vibeking` default flow so display logic can't drift.
+ */
+export function computeRevealInput(summary: ScanSummary, scope: Scope): RevealInput {
   const cutoff = scopeCutoff(scope);
   const inRange = cutoff
     ? summary.daily.filter((d) => d.date >= cutoff)
@@ -41,21 +55,14 @@ export async function runScan(opts: ScanOptions = {}): Promise<void> {
     { tokens: 0, sessions: 0 }
   );
   const top = pickTopModel(inRange);
-
-  process.stdout.write(
-    renderReveal({
-      scope,
-      tokens: totals.tokens,
-      sessions: totals.sessions,
-      activeDays: inRange.length,
-      topModel: top.model,
-      topModelShare: top.share,
-    })
-  );
-
-  process.stdout.write(
-    `  ${pc.dim("inspect upload")}  ${pc.bold("vibeking inspect-upload")}  ${pc.dim("(see exactly what would be sent)")}\n\n`
-  );
+  return {
+    scope,
+    tokens: totals.tokens,
+    sessions: totals.sessions,
+    activeDays: inRange.length,
+    topModel: top.model,
+    topModelShare: top.share,
+  };
 }
 
 function scopeCutoff(scope: Scope): string | null {

@@ -36,10 +36,6 @@ export function renderReveal(i: RevealInput): string {
   lines.push(`  ${pc.bold("You have data worth publishing.")}`);
   lines.push("");
 
-  lines.push(`  ${pc.dim("Publish to see your title, rank, roast, card, and leagues:")}`);
-  lines.push(`    ${pc.bold("vibeking publish")}`);
-  lines.push("");
-
   return lines.join("\n");
 }
 
