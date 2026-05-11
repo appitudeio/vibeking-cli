@@ -1,5 +1,5 @@
 import pc from "picocolors";
-import { isAuthRejection, requireAuthedConfig } from "../util/requireAuth.js";
+import { isAuthRejection, requireAuthedConfig } from "../util/config.js";
 import { buildPayloadFromScanOrExit } from "../util/buildPayload.js";
 
 export async function runPublish(): Promise<void> {

@@ -1,7 +1,12 @@
 import pc from "picocolors";
-import { clearAuth, readConfig, writeConfig } from "../util/config.js";
+import {
+  clearAuth,
+  isAuthRejection,
+  readConfig,
+  requireAuthedConfig,
+  writeConfig,
+} from "../util/config.js";
 import { openUrl } from "../util/openUrl.js";
-import { isAuthRejection, requireAuthedConfig } from "../util/requireAuth.js";
 
 const POLL_INTERVAL_MS = 2000;
 const POLL_MAX_MS = 10 * 60_000; // matches the server's device-code TTL

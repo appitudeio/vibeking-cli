@@ -1,6 +1,13 @@
 import * as v from "valibot";
-import { ISO_DATE_REGEX } from "./dateUtils.js";
 import type { DailyAggregate, SourceType } from "./types.js";
+
+/** Matches a YYYY-MM-DD string; doesn't validate the date itself. */
+export const ISO_DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
+
+/** True when the input is a well-formed YYYY-MM-DD string. */
+export function isIsoDate(s: string): boolean {
+  return ISO_DATE_REGEX.test(s);
+}
 
 // ────────────────────────────────────────────────────────────
 // UploadPayloadSchema is the SINGLE source of truth for what the

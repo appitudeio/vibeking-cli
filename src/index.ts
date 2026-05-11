@@ -1,6 +1,5 @@
 #!/usr/bin/env node
-import { runScan } from "./commands/scan.js";
-import { runDefault } from "./commands/default.js";
+import { runDefault, runScan } from "./commands/scan.js";
 import { runInspectUpload } from "./commands/inspectUpload.js";
 import { runHelp } from "./commands/help.js";
 import { runLogin, runLogout, runWhoami } from "./commands/auth.js";

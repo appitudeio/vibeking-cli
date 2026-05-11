@@ -1,5 +1,4 @@
 import pc from "picocolors";
-import { formatBurn } from "./core/format.js";
 import type { Scope } from "./core/types.js";
 
 // The offline reveal is intentionally thin: it shows observed facts and tells
@@ -60,4 +59,15 @@ function scopeLabel(scope: Scope): string {
     case "all_time":
       return "all-time";
   }
+}
+
+// Compact-burn formatter for share cards, leaderboards, and the terminal
+// reveal. Kept aligned with the server-side renderer (same thresholds, same
+// rounding) so e.g. 2.5B never shows as 2.50B from one surface but 2.5B from
+// another.
+function formatBurn(n: number): string {
+  if (n >= 1_000_000_000) return `${(n / 1_000_000_000).toFixed(2)}B`;
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
+  return n.toLocaleString();
 }
