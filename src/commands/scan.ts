@@ -1,10 +1,4 @@
-import {
-  buildScore,
-  summarizeRange,
-  SCORING_VERSION,
-  type Score,
-  type ScanSummary,
-} from "../core/index.js";
+import type { ScanSummary } from "../core/index.js";
 import pc from "picocolors";
 import { scanClaudeCode } from "../scanner.js";
 import { renderReveal, renderEmptyState } from "../reveal.js";
@@ -16,33 +10,41 @@ export type ScanOptions = {
 
 export async function runScan(opts: ScanOptions = {}): Promise<{
   summary: ScanSummary;
-  score: Score;
 }> {
   const scope = opts.scope ?? "weekly";
-
   const summary = await scanClaudeCode();
 
   if (summary.daily.length === 0) {
     process.stdout.write(
-      renderEmptyState(
-        "No Claude Code sessions found in ~/.claude/projects."
-      )
+      renderEmptyState("No Claude Code sessions found in ~/.claude/projects.")
     );
-    return { summary, score: emptyScore(scope) };
+    return { summary };
   }
 
-  const score = buildScore(summary.daily, scope);
-  const ranged = summarizeRange(summary.daily, scope);
-  const top = pickTopModel(summary.daily);
+  const cutoff = scopeCutoff(scope);
+  const inRange = summary.daily.filter((d) => d.date >= cutoff);
+  const totals = inRange.reduce(
+    (acc, d) => {
+      acc.tokens +=
+        d.inputTokens +
+        d.outputTokens +
+        d.cacheWriteTokens +
+        Math.floor(d.cacheReadTokens * 0.1);
+      acc.sessions += d.sessions;
+      return acc;
+    },
+    { tokens: 0, sessions: 0 }
+  );
+  const top = pickTopModel(inRange);
 
   process.stdout.write(
     renderReveal({
-      score,
-      totalSessions: ranged.totalSessions,
-      activeDays: ranged.activeDays,
+      scope,
+      tokens: totals.tokens,
+      sessions: totals.sessions,
+      activeDays: inRange.length,
       topModel: top.model,
       topModelShare: top.share,
-      daysCovered: summary.totalDays,
     })
   );
 
@@ -50,19 +52,14 @@ export async function runScan(opts: ScanOptions = {}): Promise<{
     `  ${pc.dim("inspect upload")}  ${pc.bold("vibeking inspect-upload")}  ${pc.dim("(see exactly what would be sent)")}\n\n`
   );
 
-  return { summary, score };
+  return { summary };
 }
 
-function emptyScore(scope: "weekly" | "monthly" | "all_time"): Score {
-  return {
-    scope,
-    vibeBurn: 0,
-    vibeScore: 0,
-    level: 1,
-    noLifeIndex: 0,
-    title: "Vibe Tourist",
-    flair: "no scans yet",
-    badges: [],
-    scoringVersion: SCORING_VERSION,
-  };
+function scopeCutoff(scope: NonNullable<ScanOptions["scope"]>): string {
+  if (scope === "all_time") return "0000-00-00";
+  const today = new Date();
+  today.setUTCHours(0, 0, 0, 0);
+  const daysBack = scope === "weekly" ? 6 : 29;
+  today.setUTCDate(today.getUTCDate() - daysBack);
+  return today.toISOString().slice(0, 10);
 }

@@ -1,5 +1,5 @@
 import * as v from "valibot";
-import { ISO_DATE_REGEX } from "./scoring.js";
+import { ISO_DATE_REGEX } from "./dateUtils.js";
 import type { DailyAggregate, SourceType } from "./types.js";
 
 // ────────────────────────────────────────────────────────────

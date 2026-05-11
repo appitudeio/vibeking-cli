@@ -1,31 +1,30 @@
 import pc from "picocolors";
-import { formatBurn, type Score } from "./core/index.js";
+import { formatBurn } from "./core/index.js";
+
+// The offline reveal is intentionally thin: it shows observed facts and tells
+// the user to publish for the official title, rank, roast, card, and leagues.
+// Anything official-looking belongs in publish.ts, where it renders the
+// server's canonical response. The CLI is the trust layer, not the game.
 
 export type RevealInput = {
-  score: Score;
-  totalSessions: number;
+  scope: "weekly" | "monthly" | "all_time";
+  tokens: number;
+  sessions: number;
   activeDays: number;
   topModel: string | null;
   topModelShare: number;
-  daysCovered: number;
 };
-
-// The offline reveal is intentionally thin: it shows observed facts plus a
-// provisional "Looks like:" teaser and tells the user to publish for the
-// official rank, roast, card, and leagues. Anything official-looking
-// (VibeScore, level, badges, roast, fancy title chrome) belongs in
-// publish.ts, where it renders the server's canonical response.
 
 export function renderReveal(i: RevealInput): string {
   const c = pc;
   const lines: string[] = [];
 
   lines.push("");
-  lines.push(`  ${c.bold("vibeking")}  ${c.dim(`${scopeLabel(i.score.scope)} scan complete`)}`);
+  lines.push(`  ${c.bold("vibeking")}  ${c.dim(`${scopeLabel(i.scope)} scan complete`)}`);
   lines.push("");
 
-  lines.push(`  ${c.dim("Tokens")}         ${c.bold(formatBurn(i.score.vibeBurn))}`);
-  lines.push(`  ${c.dim("Sessions")}       ${i.totalSessions.toLocaleString()}`);
+  lines.push(`  ${c.dim("Tokens")}         ${c.bold(formatBurn(i.tokens))}`);
+  lines.push(`  ${c.dim("Sessions")}       ${i.sessions.toLocaleString()}`);
   lines.push(`  ${c.dim("Active days")}    ${i.activeDays}`);
   if (i.topModel) {
     lines.push(
@@ -34,10 +33,10 @@ export function renderReveal(i: RevealInput): string {
   }
   lines.push("");
 
-  lines.push(`  ${c.dim("Looks like:")} ${c.bold(i.score.title)}`);
+  lines.push(`  ${c.bold("You have data worth publishing.")}`);
   lines.push("");
 
-  lines.push(`  ${c.dim("Publish to see your official rank, roast, card, and leagues:")}`);
+  lines.push(`  ${c.dim("Publish to see your title, rank, roast, card, and leagues:")}`);
   lines.push(`    ${c.bold("vibeking publish")}`);
   lines.push("");
 
@@ -57,7 +56,7 @@ export function renderEmptyState(reason: string): string {
   ].join("\n");
 }
 
-function scopeLabel(scope: Score["scope"]): string {
+function scopeLabel(scope: RevealInput["scope"]): string {
   switch (scope) {
     case "weekly":
       return "weekly";

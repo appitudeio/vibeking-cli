@@ -4,12 +4,6 @@ import { runInspectUpload } from "./commands/inspectUpload.js";
 import { runHelp } from "./commands/help.js";
 import { runLogin, runLogout, runWhoami } from "./commands/auth.js";
 import { runPublish } from "./commands/publish.js";
-import {
-  runCreateLeague,
-  runJoinLeague,
-  runLeaveLeague,
-  runListLeagues,
-} from "./commands/leagues.js";
 
 type Command =
   | "scan"
@@ -18,18 +12,12 @@ type Command =
   | "login"
   | "logout"
   | "whoami"
-  | "publish"
-  | "create-league"
-  | "join"
-  | "leagues"
-  | "leave";
+  | "publish";
 
 type ParsedArgs = {
   command: Command;
   scope: "weekly" | "monthly" | "all_time";
   open: boolean;
-  positional: string[];
-  code?: string;
 };
 
 function parseArgs(argv: string[]): ParsedArgs {
@@ -46,10 +34,6 @@ function parseArgs(argv: string[]): ParsedArgs {
     else if (first === "logout") command = "logout";
     else if (first === "whoami") command = "whoami";
     else if (first === "publish") command = "publish";
-    else if (first === "create-league") command = "create-league";
-    else if (first === "join") command = "join";
-    else if (first === "leagues") command = "leagues";
-    else if (first === "leave") command = "leave";
     else command = "scan";
   } else if (args.includes("--help") || args.includes("-h")) {
     command = "help";
@@ -59,15 +43,11 @@ function parseArgs(argv: string[]): ParsedArgs {
   if (args.includes("--all") || args.includes("--all-time")) scope = "all_time";
   const open = !args.includes("--no-open");
 
-  const positional = args.slice(1).filter((a) => !a.startsWith("-"));
-  const codeIdx = args.indexOf("--code");
-  const code = codeIdx >= 0 ? args[codeIdx + 1] : undefined;
-
-  return { command, scope, open, positional, code };
+  return { command, scope, open };
 }
 
 async function main(): Promise<void> {
-  const { command, scope, open, positional, code } = parseArgs(process.argv);
+  const { command, scope, open } = parseArgs(process.argv);
 
   switch (command) {
     case "scan":
@@ -90,18 +70,6 @@ async function main(): Promise<void> {
       return;
     case "publish":
       await runPublish();
-      return;
-    case "create-league":
-      await runCreateLeague(positional.join(" ").trim() || undefined);
-      return;
-    case "join":
-      await runJoinLeague(positional[0], code);
-      return;
-    case "leagues":
-      await runListLeagues();
-      return;
-    case "leave":
-      await runLeaveLeague(positional[0]);
       return;
   }
 }

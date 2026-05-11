@@ -22,15 +22,15 @@ npx vibeking
   Active days    7
   Main weapon    claude-opus-4-7 (79%)
 
-  Looks like: Rate Limit Royalty
+  You have data worth publishing.
 
-  Publish to see your official rank, roast, card, and leagues:
+  Publish to see your title, rank, roast, card, and leagues:
     vibeking publish
 ```
 
-The offline reveal is intentionally a teaser. The official VibeScore, level, badges, roast, and share card are computed server-side and shown after `vibeking publish`.
+The offline CLI shows only facts about your local Claude Code usage. The official title, VibeScore, level, badges, roast, share card, and league standings are computed server-side and shown after `vibeking publish`. The CLI is intentionally the trust layer (scanner + consent), not the game.
 
-`vibeking login` + `vibeking publish` to claim a public rank at [vibeking.io](https://vibeking.io).
+`vibeking login` + `vibeking publish` to claim a public rank at [vibeking.io](https://vibeking.io). League management (create / join / leave / leaderboards) lives on the web.
 
 ## Repo layout
 
@@ -38,10 +38,10 @@ The offline reveal is intentionally a teaser. The official VibeScore, level, bad
 src/
   index.ts            CLI entry point + arg parser
   scanner.ts          Reads ~/.claude/projects/*/memory.jsonl
-  reveal.ts           Offline reveal output (facts + teaser)
-  commands/           One file per command surface (scan, publish, auth, leagues, …)
+  reveal.ts           Offline reveal output (facts + publish CTA)
+  commands/           scan, publish, inspectUpload, help, auth
   util/               buildPayload, config, requireAuth, openUrl, topModel
-  core/               Scoring formula, redaction schema, response DTOs
+  core/               redaction schema, types, format, dateUtils
 test/fixtures/        Synthetic Claude Code data for the payload snapshot test
 ```
 
