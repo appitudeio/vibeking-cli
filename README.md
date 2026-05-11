@@ -39,12 +39,16 @@ src/
   index.ts            CLI entry point + arg parser
   scanner.ts          Reads ~/.claude/projects/*/memory.jsonl
   redaction.ts        UploadPayloadSchema — the security gate
+  buildPayload.ts     scanner → redaction → upload payload assembly
+  config.ts           ~/.vibeking/config.json + auth-state checks
   types.ts            Shared types (Scope, DailyAggregate, ScanSummary)
   reveal.ts           Offline reveal output (facts + publish CTA)
+  prompt.ts           y/N readline helper
+  openUrl.ts          cross-platform browser launcher
+  topModel.ts         pickTopModel from daily aggregates
   version.ts          CLI version constant
   commands/           scan (+ default flow), publish, inspectUpload, help, auth
-  util/               buildPayload, config, prompt, openUrl, topModel
-  __tests__/          redaction + payload-snapshot tests
+  __tests__/          redaction, payload-snapshot, prompt tests
 test/fixtures/        Synthetic Claude Code data for the payload snapshot test
 ```
 
@@ -55,7 +59,7 @@ The leaderboard backend, web app, anti-cheat heuristics, and admin tools live in
 The whole pitch hinges on three things:
 
 1. **The scanner is right here.** [`src/scanner.ts`](./src/scanner.ts) is short enough to read in five minutes. It reads `~/.claude/projects/*/memory.jsonl`, pulls timestamps + model names + token counts, and that's it.
-2. **The payload builder is shared.** [`src/util/buildPayload.ts`](./src/util/buildPayload.ts) is the one function that turns local data into something uploadable. Both `vibeking publish` and `vibeking inspect-upload` call it — they cannot drift.
+2. **The payload builder is shared.** [`src/buildPayload.ts`](./src/buildPayload.ts) is the one function that turns local data into something uploadable. Both `vibeking publish` and `vibeking inspect-upload` call it — they cannot drift.
 3. **The schema is `strictObject`-enforced.** [`src/redaction.ts`](./src/redaction.ts) defines `UploadPayloadSchema` with Valibot `v.strictObject` — any unknown key throws before the request leaves your machine. The [redaction tests](./src/__tests__/redaction.test.ts) and the [fixture-based payload snapshot](./src/__tests__/upload-payload-snapshot.test.ts) cover prompt/path-shaped leaks and wire-format stability.
 
 ## Develop

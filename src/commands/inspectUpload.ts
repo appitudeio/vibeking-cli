@@ -1,5 +1,5 @@
 import pc from "picocolors";
-import { buildPayloadFromScanOrExit } from "../util/buildPayload.js";
+import { buildPayloadFromScanOrExit } from "../buildPayload.js";
 
 export async function runInspectUpload(): Promise<void> {
   process.stdout.write(

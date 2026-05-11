@@ -1,8 +1,8 @@
 import pc from "picocolors";
 import * as v from "valibot";
-import { buildUploadPayload, type UploadPayload } from "../redaction.js";
-import { scanClaudeCode } from "../scanner.js";
-import { CLI_VERSION } from "../version.js";
+import { buildUploadPayload, type UploadPayload } from "./redaction.js";
+import { scanClaudeCode } from "./scanner.js";
+import { CLI_VERSION } from "./version.js";
 
 // Shared by `publish` and `inspect-upload` so the two commands can't drift:
 // what inspect-upload prints is what publish would POST.

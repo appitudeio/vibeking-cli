@@ -45,7 +45,7 @@ The payload schema lives at [`src/redaction.ts`](./src/redaction.ts) and is enfo
 npx vibeking inspect-upload
 ```
 
-This prints the exact JSON that `vibeking publish` would send — same function, same arguments. The shared helper is [`src/util/buildPayload.ts`](./src/util/buildPayload.ts); both commands import it, so they cannot drift.
+This prints the exact JSON that `vibeking publish` would send — same function, same arguments. The shared helper is [`src/buildPayload.ts`](./src/buildPayload.ts); both commands import it, so they cannot drift.
 
 If you want to be extra sure: route the CLI through a local proxy and diff.
 

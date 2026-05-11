@@ -1,6 +1,6 @@
 import pc from "picocolors";
-import { isAuthRejection, requireAuthedConfig } from "../util/config.js";
-import { buildPayloadFromScanOrExit } from "../util/buildPayload.js";
+import { isAuthRejection, requireAuthedConfig } from "../config.js";
+import { buildPayloadFromScanOrExit } from "../buildPayload.js";
 
 export async function runPublish(): Promise<void> {
   const cfg = await requireAuthedConfig();

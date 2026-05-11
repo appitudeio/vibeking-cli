@@ -5,8 +5,8 @@ import {
   readConfig,
   requireAuthedConfig,
   writeConfig,
-} from "../util/config.js";
-import { openUrl } from "../util/openUrl.js";
+} from "../config.js";
+import { openUrl } from "../openUrl.js";
 
 const POLL_INTERVAL_MS = 2000;
 const POLL_MAX_MS = 10 * 60_000; // matches the server's device-code TTL

@@ -2,9 +2,9 @@ import pc from "picocolors";
 import type { Scope, ScanSummary } from "../types.js";
 import { scanClaudeCode } from "../scanner.js";
 import { renderReveal, renderEmptyState, type RevealInput } from "../reveal.js";
-import { pickTopModel } from "../util/topModel.js";
-import { readConfig, tokenMatchesHost, writeConfig } from "../util/config.js";
-import { confirm } from "../util/prompt.js";
+import { pickTopModel } from "../topModel.js";
+import { readConfig, tokenMatchesHost, writeConfig } from "../config.js";
+import { confirm } from "../prompt.js";
 import { runLogin } from "./auth.js";
 import { runPublish } from "./publish.js";
 
