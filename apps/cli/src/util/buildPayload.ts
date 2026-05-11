@@ -1,5 +1,5 @@
-import kleur from "kleur";
-import { z } from "zod";
+import pc from "picocolors";
+import * as v from "valibot";
 import { buildUploadPayload, type UploadPayload } from "@vibeking/core";
 import { scanClaudeCode } from "../scanners/claudeCode.js";
 import { CLI_VERSION } from "../version.js";
@@ -21,7 +21,7 @@ export async function buildPayloadFromScan(): Promise<UploadPayload> {
 }
 
 /**
- * Same as buildPayloadFromScan, but catches ZodError (the redaction
+ * Same as buildPayloadFromScan, but catches ValiError (the redaction
  * layer firing on malformed local data) and prints a friendly message
  * before exiting. Use from any command that doesn't want to deal with
  * the catch boilerplate.
@@ -29,16 +29,18 @@ export async function buildPayloadFromScan(): Promise<UploadPayload> {
 export async function buildPayloadFromScanOrExit(opts: {
   heading: string;
 }): Promise<UploadPayload | null> {
-  const c = kleur;
+  const c = pc;
   try {
     return await buildPayloadFromScan();
   } catch (err) {
-    if (err instanceof z.ZodError) {
+    if (err instanceof v.ValiError) {
       process.stdout.write(`\n  ${c.red("✕")} ${opts.heading}:\n`);
       for (const issue of err.issues) {
-        process.stdout.write(
-          `    - ${issue.path.join(".")}: ${issue.message}\n`
-        );
+        const path =
+          issue.path
+            ?.map((p: { key: PropertyKey }) => String(p.key))
+            .join(".") ?? "";
+        process.stdout.write(`    - ${path}: ${issue.message}\n`);
       }
       process.stdout.write("\n");
       process.exitCode = 1;

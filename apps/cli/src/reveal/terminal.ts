@@ -1,4 +1,4 @@
-import kleur from "kleur";
+import pc from "picocolors";
 import { formatBurn, type Score } from "@vibeking/core";
 
 export type RevealInput = {
@@ -19,14 +19,14 @@ const CROWN = `       __||__
 
 export function renderReveal(i: RevealInput): string {
   const lines: string[] = [];
-  const c = kleur;
+  const c = pc;
 
   lines.push("");
-  lines.push(c.yellow().bold(CROWN));
+  lines.push(c.bold(c.yellow(CROWN)));
   lines.push("");
   lines.push(
-    c.bold().white("  ") +
-      c.bgYellow().black().bold(" VibeKing ") +
+    c.white(c.bold("  ")) +
+      c.bold(c.black(c.bgYellow(" VibeKing "))) +
       c.dim(`  ${scopeLabel(i.score.scope)} scan complete`)
   );
   lines.push("");
@@ -35,20 +35,20 @@ export function renderReveal(i: RevealInput): string {
 
   // Big number
   const burnLabel = c.dim("VibeBurn");
-  const burnValue = c.yellow().bold(formatBurn(i.score.vibeBurn));
+  const burnValue = c.bold(c.yellow(formatBurn(i.score.vibeBurn)));
   lines.push(`  ${burnLabel}        ${burnValue} ${c.dim("tokens")}`);
   lines.push(
-    `  ${c.dim("VibeScore")}       ${c.cyan().bold(i.score.vibeScore.toLocaleString())}`
+    `  ${c.dim("VibeScore")}       ${c.bold(c.cyan(i.score.vibeScore.toLocaleString()))}`
   );
   lines.push(
-    `  ${c.dim("Level")}           ${c.magenta().bold(String(i.score.level))}`
+    `  ${c.dim("Level")}           ${c.bold(c.magenta(String(i.score.level)))}`
   );
   lines.push("");
 
   // Title — the screenshot moment
   lines.push(`  ${c.dim("Title")}`);
   lines.push(
-    `  ${c.bgMagenta().white().bold(` ${i.score.title} `)}  ${c.italic().dim(i.score.flair)}`
+    `  ${c.bold(c.white(c.bgMagenta(` ${i.score.title} `)))}  ${c.dim(c.italic(i.score.flair))}`
   );
   lines.push("");
 
@@ -72,19 +72,19 @@ export function renderReveal(i: RevealInput): string {
   lines.push("");
   lines.push(divider());
   lines.push("");
-  lines.push(`  ${c.italic().yellow(i.roast)}`);
+  lines.push(`  ${c.yellow(c.italic(i.roast))}`);
   lines.push("");
 
   return lines.join("\n");
 }
 
 export function renderEmptyState(reason: string): string {
-  const c = kleur;
+  const c = pc;
   return [
     "",
-    c.yellow().bold(CROWN),
+    c.bold(c.yellow(CROWN)),
     "",
-    `  ${c.bgYellow().black().bold(" VibeKing ")}  ${c.dim("scan inconclusive")}`,
+    `  ${c.bold(c.black(c.bgYellow(" VibeKing ")))}  ${c.dim("scan inconclusive")}`,
     "",
     `  ${c.red("✕")} ${reason}`,
     "",
@@ -94,7 +94,7 @@ export function renderEmptyState(reason: string): string {
 }
 
 export function divider(): string {
-  return kleur.dim("  ───────────────────────────────────────────────────────────");
+  return pc.dim("  ───────────────────────────────────────────────────────────");
 }
 
 function scopeLabel(scope: Score["scope"]): string {

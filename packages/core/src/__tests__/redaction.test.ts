@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import * as v from "valibot";
 import {
   buildUploadPayload,
   UploadPayloadSchema,
@@ -63,11 +64,11 @@ describe("buildUploadPayload", () => {
 
 describe("UploadPayloadSchema", () => {
   it("passes a clean payload", () => {
-    expect(UploadPayloadSchema.safeParse(validInput).success).toBe(true);
+    expect(v.safeParse(UploadPayloadSchema,validInput).success).toBe(true);
   });
 
   it("rejects unexpected top-level keys (e.g., a leaked prompt field)", () => {
-    const res = UploadPayloadSchema.safeParse({
+    const res = v.safeParse(UploadPayloadSchema,{
       ...validInput,
       prompt: "leaked!",
     });
@@ -75,7 +76,7 @@ describe("UploadPayloadSchema", () => {
   });
 
   it("rejects unexpected per-day keys (e.g., a leaked file path)", () => {
-    const res = UploadPayloadSchema.safeParse({
+    const res = v.safeParse(UploadPayloadSchema,{
       ...validInput,
       daily: [{ ...validInput.daily[0]!, filePath: "/secrets/x.ts" }],
     });
@@ -83,7 +84,7 @@ describe("UploadPayloadSchema", () => {
   });
 
   it("rejects bad date format", () => {
-    const res = UploadPayloadSchema.safeParse({
+    const res = v.safeParse(UploadPayloadSchema,{
       ...validInput,
       daily: [{ ...validInput.daily[0]!, date: "yesterday" }],
     });
@@ -91,7 +92,7 @@ describe("UploadPayloadSchema", () => {
   });
 
   it("rejects negative tokens", () => {
-    const res = UploadPayloadSchema.safeParse({
+    const res = v.safeParse(UploadPayloadSchema,{
       ...validInput,
       daily: [{ ...validInput.daily[0]!, inputTokens: -1 }],
     });
@@ -99,7 +100,7 @@ describe("UploadPayloadSchema", () => {
   });
 
   it("rejects model keys containing prompt-like text or file paths", () => {
-    const leak = UploadPayloadSchema.safeParse({
+    const leak = v.safeParse(UploadPayloadSchema,{
       ...validInput,
       daily: [
         {
@@ -110,7 +111,7 @@ describe("UploadPayloadSchema", () => {
     });
     expect(leak.success).toBe(false);
 
-    const pathLeak = UploadPayloadSchema.safeParse({
+    const pathLeak = v.safeParse(UploadPayloadSchema,{
       ...validInput,
       daily: [
         {
@@ -126,7 +127,7 @@ describe("UploadPayloadSchema", () => {
   it("caps modelBreakdown at 32 keys per day", () => {
     const tooMany: Record<string, number> = {};
     for (let i = 0; i < 33; i++) tooMany[`model-${i}`] = 1 / 33;
-    const res = UploadPayloadSchema.safeParse({
+    const res = v.safeParse(UploadPayloadSchema,{
       ...validInput,
       daily: [{ ...validInput.daily[0]!, modelBreakdown: tooMany }],
     });
@@ -134,7 +135,7 @@ describe("UploadPayloadSchema", () => {
   });
 
   it("caps tokens at 1e13 per field", () => {
-    const res = UploadPayloadSchema.safeParse({
+    const res = v.safeParse(UploadPayloadSchema,{
       ...validInput,
       daily: [{ ...validInput.daily[0]!, inputTokens: 1e14 }],
     });
@@ -142,7 +143,7 @@ describe("UploadPayloadSchema", () => {
   });
 
   it("rejects non-semver cliVersion (potential leak vector)", () => {
-    const res = UploadPayloadSchema.safeParse({
+    const res = v.safeParse(UploadPayloadSchema,{
       ...validInput,
       cliVersion: "totally not a version — actually a leaked prompt",
     });

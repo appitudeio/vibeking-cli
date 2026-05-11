@@ -9,7 +9,7 @@ import {
   type Score,
   type ScanSummary,
 } from "@vibeking/core";
-import kleur from "kleur";
+import pc from "picocolors";
 import { scanClaudeCode } from "../scanners/claudeCode.js";
 import { renderReveal, renderEmptyState } from "../reveal/terminal.js";
 import { pickTopModel } from "../util/topModel.js";
@@ -76,15 +76,15 @@ export async function runScan(opts: ScanOptions = {}): Promise<{
       roast,
     });
     process.stdout.write(
-      `  ${kleur.dim("card")}            ${kleur.cyan(cardPath)}\n\n`
+      `  ${pc.dim("card")}            ${pc.cyan(cardPath)}\n\n`
     );
   }
 
   process.stdout.write(
-    `  ${kleur.dim("inspect upload")}  ${kleur.bold("vibeking inspect-upload")}  ${kleur.dim("(see exactly what would be sent)")}\n`
+    `  ${pc.dim("inspect upload")}  ${pc.bold("vibeking inspect-upload")}  ${pc.dim("(see exactly what would be sent)")}\n`
   );
   process.stdout.write(
-    `  ${kleur.dim("publish")}         ${kleur.dim().italic("coming in phase 2 — your run is on the homepage by then")}\n\n`
+    `  ${pc.dim("publish")}         ${pc.italic(pc.dim("coming in phase 2 — your run is on the homepage by then"))}\n\n`
   );
 
   return { summary, score, cardPath };

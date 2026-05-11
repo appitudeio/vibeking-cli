@@ -1,8 +1,8 @@
-import kleur from "kleur";
+import pc from "picocolors";
 import { requireAuthedConfig } from "../util/requireAuth.js";
 
 export async function runLeaveLeague(slug: string | undefined): Promise<void> {
-  const c = kleur;
+  const c = pc;
   if (!slug) {
     process.stdout.write(
       `\n  ${c.red("✕")} usage: ${c.bold("vibeking leave <slug>")}\n\n`

@@ -1,4 +1,4 @@
-import { z } from "zod";
+import * as v from "valibot";
 import { ISO_DATE_REGEX } from "./scoring.js";
 import type { DailyAggregate, SourceType } from "./types.js";
 
@@ -25,45 +25,68 @@ const CLI_VERSION_REGEX = /^\d+\.\d+\.\d+(-[a-z0-9.]+)?$/i;
  * stays well under Number.MAX_SAFE_INTEGER. */
 const MAX_TOKENS_PER_FIELD = 1e13;
 
-const ModelBreakdownSchema = z
-  .record(
-    z.string().regex(MODEL_KEY_REGEX, {
-      message:
-        "model keys must match /^[a-z0-9._:/-]{1,64}$/i — prompt text and file paths cannot be used as keys",
-    }),
-    z.number().min(0).max(1)
+const ModelBreakdownSchema = v.pipe(
+  v.record(
+    v.pipe(
+      v.string(),
+      v.regex(
+        MODEL_KEY_REGEX,
+        "model keys must match /^[a-z0-9._:/-]{1,64}$/i — prompt text and file paths cannot be used as keys"
+      )
+    ),
+    v.pipe(v.number(), v.minValue(0), v.maxValue(1))
+  ),
+  v.check(
+    (obj) => Object.keys(obj).length <= 32,
+    "modelBreakdown supports at most 32 keys per day"
   )
-  .refine((obj) => Object.keys(obj).length <= 32, {
-    message: "modelBreakdown supports at most 32 keys per day",
-  });
+);
 
-const DailyAggregateSchema = z
-  .object({
-    date: z.string().regex(ISO_DATE_REGEX, {
-      message: "date must be YYYY-MM-DD",
-    }),
-    inputTokens: z.number().int().min(0).max(MAX_TOKENS_PER_FIELD),
-    outputTokens: z.number().int().min(0).max(MAX_TOKENS_PER_FIELD),
-    cacheReadTokens: z.number().int().min(0).max(MAX_TOKENS_PER_FIELD),
-    cacheWriteTokens: z.number().int().min(0).max(MAX_TOKENS_PER_FIELD),
-    sessions: z.number().int().min(0).max(1_000_000),
-    modelBreakdown: ModelBreakdownSchema,
-  })
-  .strict(); // reject unknown per-day keys (leaked file paths, etc.)
+const DailyAggregateSchema = v.strictObject({
+  date: v.pipe(
+    v.string(),
+    v.regex(ISO_DATE_REGEX, "date must be YYYY-MM-DD")
+  ),
+  inputTokens: v.pipe(
+    v.number(),
+    v.integer(),
+    v.minValue(0),
+    v.maxValue(MAX_TOKENS_PER_FIELD)
+  ),
+  outputTokens: v.pipe(
+    v.number(),
+    v.integer(),
+    v.minValue(0),
+    v.maxValue(MAX_TOKENS_PER_FIELD)
+  ),
+  cacheReadTokens: v.pipe(
+    v.number(),
+    v.integer(),
+    v.minValue(0),
+    v.maxValue(MAX_TOKENS_PER_FIELD)
+  ),
+  cacheWriteTokens: v.pipe(
+    v.number(),
+    v.integer(),
+    v.minValue(0),
+    v.maxValue(MAX_TOKENS_PER_FIELD)
+  ),
+  sessions: v.pipe(v.number(), v.integer(), v.minValue(0), v.maxValue(1_000_000)),
+  modelBreakdown: ModelBreakdownSchema,
+}); // strictObject rejects unknown per-day keys (leaked file paths, etc.)
 
-export const UploadPayloadSchema = z
-  .object({
-    schemaVersion: z.literal(1),
-    source: z.literal("claude_code"),
-    cliVersion: z.string().regex(CLI_VERSION_REGEX, {
-      message: "cliVersion must be semver-ish",
-    }),
-    scannedAt: z.string().datetime(),
-    daily: z.array(DailyAggregateSchema).max(366),
-  })
-  .strict(); // reject unknown top-level keys (leaked prompts, etc.)
+export const UploadPayloadSchema = v.strictObject({
+  schemaVersion: v.literal(1),
+  source: v.literal("claude_code"),
+  cliVersion: v.pipe(
+    v.string(),
+    v.regex(CLI_VERSION_REGEX, "cliVersion must be semver-ish")
+  ),
+  scannedAt: v.pipe(v.string(), v.isoTimestamp()),
+  daily: v.pipe(v.array(DailyAggregateSchema), v.maxLength(366)),
+}); // strictObject rejects unknown top-level keys (leaked prompts, etc.)
 
-export type UploadPayload = z.infer<typeof UploadPayloadSchema>;
+export type UploadPayload = v.InferOutput<typeof UploadPayloadSchema>;
 
 /**
  * Build the upload payload from local aggregates. This is the ONE function
@@ -93,5 +116,5 @@ export function buildUploadPayload(args: {
   // Parse-validate before returning, so callers cannot leak. If the local
   // data violates the schema (e.g. a model name with a colon-prefix that
   // doesn't match), we throw at the source rather than upload garbage.
-  return UploadPayloadSchema.parse(payload);
+  return v.parse(UploadPayloadSchema, payload);
 }

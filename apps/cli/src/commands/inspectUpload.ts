@@ -1,12 +1,12 @@
-import kleur from "kleur";
+import pc from "picocolors";
 import { buildPayloadFromScanOrExit } from "../util/buildPayload.js";
 
 export async function runInspectUpload(): Promise<void> {
-  const c = kleur;
+  const c = pc;
   process.stdout.write(
     [
       "",
-      `  ${c.bgYellow().black().bold(" inspect-upload ")}  ${c.dim("the exact JSON that would be sent")}`,
+      `  ${c.bold(c.black(c.bgYellow(" inspect-upload ")))}  ${c.dim("the exact JSON that would be sent")}`,
       "",
     ].join("\n") + "\n"
   );

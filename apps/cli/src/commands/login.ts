@@ -1,16 +1,16 @@
-import kleur from "kleur";
-import open from "open";
+import pc from "picocolors";
 import { readConfig, writeConfig } from "../util/config.js";
+import { openUrl } from "../util/openUrl.js";
 
 const POLL_INTERVAL_MS = 2000;
 const POLL_MAX_MS = 10 * 60_000; // 10 minutes — matches server TTL
 
 export async function runLogin(opts: { open?: boolean } = {}): Promise<void> {
-  const c = kleur;
+  const c = pc;
   const cfg = await readConfig();
 
   process.stdout.write(
-    `\n  ${c.bgYellow().black().bold(" vibeking login ")}  ${c.dim("github oauth via " + cfg.webUrl)}\n\n`
+    `\n  ${c.bold(c.black(c.bgYellow(" vibeking login ")))}  ${c.dim("github oauth via " + cfg.webUrl)}\n\n`
   );
 
   // 1) Ask the API for a code.
@@ -38,7 +38,7 @@ export async function runLogin(opts: { open?: boolean } = {}): Promise<void> {
 
   if (opts.open !== false) {
     try {
-      await open(verifyUrl);
+      await openUrl(verifyUrl);
     } catch {
       // continue anyway — user can paste the URL manually
     }

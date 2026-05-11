@@ -1,4 +1,4 @@
-import kleur from "kleur";
+import pc from "picocolors";
 import { readConfig, tokenMatchesHost, type CliConfig } from "./config.js";
 
 /**
@@ -12,7 +12,7 @@ import { readConfig, tokenMatchesHost, type CliConfig } from "./config.js";
  *     var or default flip; refuse to leak the bearer to the new host)
  */
 export async function requireAuthedConfig(): Promise<CliConfig | null> {
-  const c = kleur;
+  const c = pc;
   const cfg = await readConfig();
 
   if (!cfg.token) {

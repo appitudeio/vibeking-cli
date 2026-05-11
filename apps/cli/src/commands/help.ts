@@ -1,12 +1,12 @@
-import kleur from "kleur";
+import pc from "picocolors";
 import { CLI_VERSION } from "../version.js";
 
 export function runHelp(): void {
-  const c = kleur;
+  const c = pc;
   process.stdout.write(
     [
       "",
-      `  ${c.bgYellow().black().bold(" VibeKing ")}  ${c.dim(`v${CLI_VERSION}`)}`,
+      `  ${c.bold(c.black(c.bgYellow(" VibeKing ")))}  ${c.dim(`v${CLI_VERSION}`)}`,
       `  ${c.dim("the leaderboard for vibe coders")}`,
       "",
       `  ${c.bold("usage")}`,

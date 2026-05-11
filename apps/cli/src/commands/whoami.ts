@@ -1,8 +1,8 @@
-import kleur from "kleur";
+import pc from "picocolors";
 import { requireAuthedConfig } from "../util/requireAuth.js";
 
 export async function runWhoami(): Promise<void> {
-  const c = kleur;
+  const c = pc;
   const cfg = await requireAuthedConfig();
   if (!cfg) return;
 

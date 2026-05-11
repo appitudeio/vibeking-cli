@@ -1,4 +1,4 @@
-import { z } from "zod";
+import * as v from "valibot";
 
 // ────────────────────────────────────────────────────────────
 // API response DTOs — shared between the API (which produces them)
@@ -8,97 +8,97 @@ import { z } from "zod";
 // the wire format.
 // ────────────────────────────────────────────────────────────
 
-export const ScoreScopeSchema = z.enum(["weekly", "monthly", "all_time"]);
-export type ScoreScope = z.infer<typeof ScoreScopeSchema>;
+export const ScoreScopeSchema = v.picklist(["weekly", "monthly", "all_time"]);
+export type ScoreScope = v.InferOutput<typeof ScoreScopeSchema>;
 
-export const ScoreSnapshotDtoSchema = z.object({
+export const ScoreSnapshotDtoSchema = v.object({
   scope: ScoreScopeSchema,
-  vibeBurn: z.number().int().nonnegative(),
-  vibeScore: z.number().int().nonnegative(),
-  level: z.number().int().positive(),
-  title: z.string(),
-  flair: z.string(),
-  badges: z.array(z.string()),
-  costUsd: z.number().nonnegative(),
-  scoringVersion: z.string(),
-  calculatedAt: z.string(),
+  vibeBurn: v.pipe(v.number(), v.integer(), v.minValue(0)),
+  vibeScore: v.pipe(v.number(), v.integer(), v.minValue(0)),
+  level: v.pipe(v.number(), v.integer(), v.minValue(1)),
+  title: v.string(),
+  flair: v.string(),
+  badges: v.array(v.string()),
+  costUsd: v.pipe(v.number(), v.minValue(0)),
+  scoringVersion: v.string(),
+  calculatedAt: v.string(),
 });
-export type ScoreSnapshotDto = z.infer<typeof ScoreSnapshotDtoSchema>;
+export type ScoreSnapshotDto = v.InferOutput<typeof ScoreSnapshotDtoSchema>;
 
-export const PublicUserDtoSchema = z.object({
-  handle: z.string(),
-  displayName: z.string(),
-  avatarUrl: z.string().nullable(),
-  country: z.string().nullable(),
-  city: z.string().nullable(),
+export const PublicUserDtoSchema = v.object({
+  handle: v.string(),
+  displayName: v.string(),
+  avatarUrl: v.nullable(v.string()),
+  country: v.nullable(v.string()),
+  city: v.nullable(v.string()),
 });
-export type PublicUserDto = z.infer<typeof PublicUserDtoSchema>;
+export type PublicUserDto = v.InferOutput<typeof PublicUserDtoSchema>;
 
-export const ProfileResponseSchema = z.object({
-  ok: z.literal(true),
+export const ProfileResponseSchema = v.object({
+  ok: v.literal(true),
   user: PublicUserDtoSchema,
-  scores: z.array(ScoreSnapshotDtoSchema),
+  scores: v.array(ScoreSnapshotDtoSchema),
 });
-export type ProfileResponse = z.infer<typeof ProfileResponseSchema>;
+export type ProfileResponse = v.InferOutput<typeof ProfileResponseSchema>;
 
-export const LeaderboardEntryDtoSchema = z.object({
-  rank: z.number().int().positive(),
+export const LeaderboardEntryDtoSchema = v.object({
+  rank: v.pipe(v.number(), v.integer(), v.minValue(1)),
   // Non-null: the API filters out users who haven't picked a handle.
-  handle: z.string(),
-  displayName: z.string(),
-  avatarUrl: z.string().nullable(),
-  country: z.string().nullable(),
-  vibeBurn: z.number().int().nonnegative(),
-  vibeScore: z.number().int().nonnegative(),
-  level: z.number().int().positive(),
-  title: z.string(),
-  flair: z.string(),
-  badges: z.array(z.string()),
-  streakDays: z.number().int().nonnegative(),
+  handle: v.string(),
+  displayName: v.string(),
+  avatarUrl: v.nullable(v.string()),
+  country: v.nullable(v.string()),
+  vibeBurn: v.pipe(v.number(), v.integer(), v.minValue(0)),
+  vibeScore: v.pipe(v.number(), v.integer(), v.minValue(0)),
+  level: v.pipe(v.number(), v.integer(), v.minValue(1)),
+  title: v.string(),
+  flair: v.string(),
+  badges: v.array(v.string()),
+  streakDays: v.pipe(v.number(), v.integer(), v.minValue(0)),
   /** 0–1 fraction: how much of the burn happened on weekends. */
-  noLifeIndex: z.number().min(0).max(1),
+  noLifeIndex: v.pipe(v.number(), v.minValue(0), v.maxValue(1)),
 });
-export type LeaderboardEntryDto = z.infer<typeof LeaderboardEntryDtoSchema>;
+export type LeaderboardEntryDto = v.InferOutput<typeof LeaderboardEntryDtoSchema>;
 
-export const LeaderboardResponseSchema = z.object({
-  ok: z.literal(true),
+export const LeaderboardResponseSchema = v.object({
+  ok: v.literal(true),
   scope: ScoreScopeSchema,
-  total: z.number().int().nonnegative(),
-  entries: z.array(LeaderboardEntryDtoSchema),
+  total: v.pipe(v.number(), v.integer(), v.minValue(0)),
+  entries: v.array(LeaderboardEntryDtoSchema),
 });
-export type LeaderboardResponse = z.infer<typeof LeaderboardResponseSchema>;
+export type LeaderboardResponse = v.InferOutput<typeof LeaderboardResponseSchema>;
 
-export const WhoamiResponseSchema = z.object({
-  ok: z.literal(true),
-  authMethod: z.enum(["session", "cli_token"]),
-  user: z.object({
-    id: z.string(),
-    handle: z.string().nullable(),
-    name: z.string(),
-    country: z.string().nullable(),
+export const WhoamiResponseSchema = v.object({
+  ok: v.literal(true),
+  authMethod: v.picklist(["session", "cli_token"]),
+  user: v.object({
+    id: v.string(),
+    handle: v.nullable(v.string()),
+    name: v.string(),
+    country: v.nullable(v.string()),
   }),
 });
-export type WhoamiResponse = z.infer<typeof WhoamiResponseSchema>;
+export type WhoamiResponse = v.InferOutput<typeof WhoamiResponseSchema>;
 
-export const ScanAcceptedResponseSchema = z.object({
-  ok: z.literal(true),
-  stored: z.boolean(),
-  acceptedDays: z.number().int().nonnegative(),
+export const ScanAcceptedResponseSchema = v.object({
+  ok: v.literal(true),
+  stored: v.boolean(),
+  acceptedDays: v.pipe(v.number(), v.integer(), v.minValue(0)),
   scope: ScoreScopeSchema,
-  score: z.object({
-    vibeBurn: z.number().int().nonnegative(),
-    vibeScore: z.number().int().nonnegative(),
-    level: z.number().int().positive(),
-    title: z.string(),
-    flair: z.string(),
-    badges: z.array(z.string()),
+  score: v.object({
+    vibeBurn: v.pipe(v.number(), v.integer(), v.minValue(0)),
+    vibeScore: v.pipe(v.number(), v.integer(), v.minValue(0)),
+    level: v.pipe(v.number(), v.integer(), v.minValue(1)),
+    title: v.string(),
+    flair: v.string(),
+    badges: v.array(v.string()),
   }),
 });
-export type ScanAcceptedResponse = z.infer<typeof ScanAcceptedResponseSchema>;
+export type ScanAcceptedResponse = v.InferOutput<typeof ScanAcceptedResponseSchema>;
 
 // Closed set of reasons a /scan submission can be rejected at the gate.
 // Mirrors heuristics.ts RejectReason["code"] — keep both in sync.
-export const ScanRejectReasonSchema = z.enum([
+export const ScanRejectReasonSchema = v.picklist([
   "future_date",
   "ancient_date",
   "impossible_burn",
@@ -106,23 +106,23 @@ export const ScanRejectReasonSchema = z.enum([
   "backfill_too_long",
   "malformed_payload",
 ]);
-export type ScanRejectReason = z.infer<typeof ScanRejectReasonSchema>;
+export type ScanRejectReason = v.InferOutput<typeof ScanRejectReasonSchema>;
 
-export const ScanRejectedResponseSchema = z.object({
-  ok: z.literal(false),
-  error: z.literal("invalid_payload"),
+export const ScanRejectedResponseSchema = v.object({
+  ok: v.literal(false),
+  error: v.literal("invalid_payload"),
   reason: ScanRejectReasonSchema,
-  detail: z.string(),
-  date: z.string().optional(),
+  detail: v.string(),
+  date: v.optional(v.string()),
 });
-export type ScanRejectedResponse = z.infer<typeof ScanRejectedResponseSchema>;
+export type ScanRejectedResponse = v.InferOutput<typeof ScanRejectedResponseSchema>;
 
-export const ScanRateLimitedResponseSchema = z.object({
-  ok: z.literal(false),
-  error: z.literal("rate_limited"),
-  retryAfterSeconds: z.number().int().nonnegative(),
+export const ScanRateLimitedResponseSchema = v.object({
+  ok: v.literal(false),
+  error: v.literal("rate_limited"),
+  retryAfterSeconds: v.pipe(v.number(), v.integer(), v.minValue(0)),
 });
-export type ScanRateLimitedResponse = z.infer<
+export type ScanRateLimitedResponse = v.InferOutput<
   typeof ScanRateLimitedResponseSchema
 >;
 
@@ -133,85 +133,87 @@ export type ScanRateLimitedResponse = z.infer<
 // v1 only ships country + private; global is implicit (=overall leaderboard).
 // tool/creator/city stay in the DB enum for forward-compat but aren't exposed
 // on the wire until later phases.
-export const LeagueTypeSchema = z.enum(["country", "private"]);
-export type LeagueType = z.infer<typeof LeagueTypeSchema>;
+export const LeagueTypeSchema = v.picklist(["country", "private"]);
+export type LeagueType = v.InferOutput<typeof LeagueTypeSchema>;
 
-export const LeagueVisibilitySchema = z.enum([
+export const LeagueVisibilitySchema = v.picklist([
   "public",
   "unlisted",
   "private",
 ]);
-export type LeagueVisibility = z.infer<typeof LeagueVisibilitySchema>;
+export type LeagueVisibility = v.InferOutput<typeof LeagueVisibilitySchema>;
 
-export const LeagueDtoSchema = z.object({
-  slug: z.string(),
-  name: z.string(),
+export const LeagueDtoSchema = v.object({
+  slug: v.string(),
+  name: v.string(),
   type: LeagueTypeSchema,
   visibility: LeagueVisibilitySchema,
-  memberCount: z.number().int().nonnegative(),
+  memberCount: v.pipe(v.number(), v.integer(), v.minValue(0)),
   // null for country leagues (no owner) and any other ownerless league.
-  ownerHandle: z.string().nullable(),
-  isOwner: z.boolean(),
-  isMember: z.boolean(),
-  createdAt: z.string(),
+  ownerHandle: v.nullable(v.string()),
+  isOwner: v.boolean(),
+  isMember: v.boolean(),
+  createdAt: v.string(),
 });
-export type LeagueDto = z.infer<typeof LeagueDtoSchema>;
+export type LeagueDto = v.InferOutput<typeof LeagueDtoSchema>;
 
-export const LeagueResponseSchema = z.object({
-  ok: z.literal(true),
+export const LeagueResponseSchema = v.object({
+  ok: v.literal(true),
   league: LeagueDtoSchema,
 });
-export type LeagueResponse = z.infer<typeof LeagueResponseSchema>;
+export type LeagueResponse = v.InferOutput<typeof LeagueResponseSchema>;
 
-export const LeagueLeaderboardResponseSchema = z.object({
-  ok: z.literal(true),
+export const LeagueLeaderboardResponseSchema = v.object({
+  ok: v.literal(true),
   league: LeagueDtoSchema,
   scope: ScoreScopeSchema,
-  entries: z.array(LeaderboardEntryDtoSchema),
+  entries: v.array(LeaderboardEntryDtoSchema),
 });
-export type LeagueLeaderboardResponse = z.infer<
+export type LeagueLeaderboardResponse = v.InferOutput<
   typeof LeagueLeaderboardResponseSchema
 >;
 
 // MyLeagues embeds the user's own weekly rank in each league (avoiding N+1
 // fetches from the CLI / dashboard).
-export const MyLeagueDtoSchema = LeagueDtoSchema.extend({
-  myWeeklyRank: z.number().int().positive().nullable(),
+export const MyLeagueDtoSchema = v.object({
+  ...LeagueDtoSchema.entries,
+  myWeeklyRank: v.nullable(v.pipe(v.number(), v.integer(), v.minValue(1))),
 });
-export type MyLeagueDto = z.infer<typeof MyLeagueDtoSchema>;
+export type MyLeagueDto = v.InferOutput<typeof MyLeagueDtoSchema>;
 
-export const MyLeaguesResponseSchema = z.object({
-  ok: z.literal(true),
-  leagues: z.array(MyLeagueDtoSchema),
+export const MyLeaguesResponseSchema = v.object({
+  ok: v.literal(true),
+  leagues: v.array(MyLeagueDtoSchema),
 });
-export type MyLeaguesResponse = z.infer<typeof MyLeaguesResponseSchema>;
+export type MyLeaguesResponse = v.InferOutput<typeof MyLeaguesResponseSchema>;
 
 // Name allows letters (Unicode), digits, spaces, dots, dashes, underscores,
 // apostrophes — enough for any culture's casual name; rejects HTML / quotes /
 // other prompt-injection vectors.
 const LEAGUE_NAME_REGEX = /^[\p{L}\p{N}\p{Z}.\-_']+$/u;
 
-export const CreateLeagueRequestSchema = z
-  .object({
-    name: z.string().min(3).max(40).regex(LEAGUE_NAME_REGEX, {
-      message:
-        "league name must be 3–40 letters, digits, spaces, or .-_' characters",
-    }),
-  })
-  .strict();
-export type CreateLeagueRequest = z.infer<typeof CreateLeagueRequestSchema>;
-
-export const CreateLeagueResponseSchema = z.object({
-  ok: z.literal(true),
-  league: LeagueDtoSchema,
-  inviteCode: z.string(),
-  inviteUrl: z.string(),
+export const CreateLeagueRequestSchema = v.strictObject({
+  name: v.pipe(
+    v.string(),
+    v.minLength(3),
+    v.maxLength(40),
+    v.regex(
+      LEAGUE_NAME_REGEX,
+      "league name must be 3–40 letters, digits, spaces, or .-_' characters"
+    )
+  ),
 });
-export type CreateLeagueResponse = z.infer<typeof CreateLeagueResponseSchema>;
+export type CreateLeagueRequest = v.InferOutput<typeof CreateLeagueRequestSchema>;
 
-export const JoinLeagueRequestSchema = z
-  .object({
-    code: z.string().min(1).max(40).optional(),
-  })
-  .strict();
-export type JoinLeagueRequest = z.infer<typeof JoinLeagueRequestSchema>;
+export const CreateLeagueResponseSchema = v.object({
+  ok: v.literal(true),
+  league: LeagueDtoSchema,
+  inviteCode: v.string(),
+  inviteUrl: v.string(),
+});
+export type CreateLeagueResponse = v.InferOutput<typeof CreateLeagueResponseSchema>;
+
+export const JoinLeagueRequestSchema = v.strictObject({
+  code: v.optional(v.pipe(v.string(), v.minLength(1), v.maxLength(40))),
+});
+export type JoinLeagueRequest = v.InferOutput<typeof JoinLeagueRequestSchema>;

@@ -1,4 +1,5 @@
-import kleur from "kleur";
+import pc from "picocolors";
+import * as v from "valibot";
 import { LeagueResponseSchema } from "@vibeking/core";
 import { requireAuthedConfig } from "../util/requireAuth.js";
 
@@ -6,7 +7,7 @@ export async function runJoinLeague(
   slug: string | undefined,
   code: string | undefined
 ): Promise<void> {
-  const c = kleur;
+  const c = pc;
   if (!slug) {
     process.stdout.write(
       `\n  ${c.red("✕")} usage: ${c.bold("vibeking join <slug> [--code <code>]")}\n\n`
@@ -53,7 +54,7 @@ export async function runJoinLeague(
     return;
   }
 
-  const body = LeagueResponseSchema.parse(await res.json());
+  const body = v.parse(LeagueResponseSchema, await res.json());
   const url = `${cfg.webUrl}/l/${body.league.slug}`;
 
   process.stdout.write(

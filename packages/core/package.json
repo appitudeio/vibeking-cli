@@ -21,7 +21,7 @@
     "clean": "rm -rf dist .turbo *.tsbuildinfo"
   },
   "dependencies": {
-    "zod": "^3.24.1"
+    "valibot": "^1.0.0"
   },
   "devDependencies": {
     "@vibeking/tsconfig": "workspace:*",

@@ -1,9 +1,10 @@
-import kleur from "kleur";
+import pc from "picocolors";
+import * as v from "valibot";
 import { CreateLeagueResponseSchema } from "@vibeking/core";
 import { requireAuthedConfig } from "../util/requireAuth.js";
 
 export async function runCreateLeague(name: string | undefined): Promise<void> {
-  const c = kleur;
+  const c = pc;
   if (!name || name.trim().length < 3) {
     process.stdout.write(
       `\n  ${c.red("✕")} usage: ${c.bold("vibeking create-league <name>")}\n\n`
@@ -33,7 +34,7 @@ export async function runCreateLeague(name: string | undefined): Promise<void> {
     return;
   }
 
-  const body = CreateLeagueResponseSchema.parse(await res.json());
+  const body = v.parse(CreateLeagueResponseSchema, await res.json());
 
   process.stdout.write(
     `\n  ${c.green("✓")} created ${c.bold(body.league.name)}  ${c.dim(`(${body.league.slug})`)}\n` +

@@ -1,9 +1,9 @@
-import kleur from "kleur";
+import pc from "picocolors";
 import { requireAuthedConfig } from "../util/requireAuth.js";
 import { buildPayloadFromScanOrExit } from "../util/buildPayload.js";
 
 export async function runPublish(): Promise<void> {
-  const c = kleur;
+  const c = pc;
   const cfg = await requireAuthedConfig();
   if (!cfg) return;
 
@@ -68,9 +68,9 @@ export async function runPublish(): Promise<void> {
 
   process.stdout.write(
     `  ${c.green("✓")} ${c.bold("published")}\n\n` +
-      `  ${c.dim("title")}      ${c.bgMagenta().white().bold(` ${body.score.title} `)} ${c.italic().dim(body.score.flair)}\n` +
-      `  ${c.dim("score")}      ${c.cyan().bold(body.score.vibeScore.toLocaleString())}\n` +
-      `  ${c.dim("level")}      ${c.magenta().bold(String(body.score.level))}\n` +
+      `  ${c.dim("title")}      ${c.bold(c.white(c.bgMagenta(` ${body.score.title} `)))} ${c.dim(c.italic(body.score.flair))}\n` +
+      `  ${c.dim("score")}      ${c.bold(c.cyan(body.score.vibeScore.toLocaleString()))}\n` +
+      `  ${c.dim("level")}      ${c.bold(c.magenta(String(body.score.level)))}\n` +
       `  ${c.dim("profile")}    ${c.cyan(profileUrl)}\n\n`
   );
 }
