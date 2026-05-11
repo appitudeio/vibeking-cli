@@ -51,12 +51,19 @@ export async function scanClaudeCodeDir(rootDir: string): Promise<ScanSummary> {
     await Promise.all(batch.map((f) => parseFile(f, byDate)));
   }
 
-  const daily = Array.from(byDate.values())
+  const sorted = Array.from(byDate.values())
     .map(finalizeDay)
-    .sort((a, b) => (a.date < b.date ? -1 : 1))
-    .slice(-MAX_DAILY_ENTRIES);
+    .sort((a, b) => (a.date < b.date ? -1 : 1));
+  const daily = sorted.slice(-MAX_DAILY_ENTRIES);
 
   if (daily.length === 0) return emptySummary();
+
+  if (sorted.length > MAX_DAILY_ENTRIES) {
+    const dropped = sorted.length - MAX_DAILY_ENTRIES;
+    process.stderr.write(
+      `vibeking: trimmed scan to most recent ${MAX_DAILY_ENTRIES} days (${dropped} older day${dropped === 1 ? "" : "s"} omitted from upload)\n`
+    );
+  }
 
   return {
     source: "claude_code",

@@ -1,4 +1,5 @@
 import pc from "picocolors";
+import * as v from "valibot";
 import {
   clearAuth,
   isAuthRejection,
@@ -10,6 +11,33 @@ import { openUrl } from "../openUrl.js";
 
 const POLL_INTERVAL_MS = 2000;
 const POLL_MAX_MS = 10 * 60_000; // matches the server's device-code TTL
+
+const StartResponseSchema = v.object({
+  code: v.string(),
+  userCode: v.string(),
+  verifyUrl: v.string(),
+  expiresAt: v.string(),
+});
+
+const PollResponseSchema = v.union([
+  v.object({ ok: v.literal(true), status: v.literal("pending") }),
+  v.object({
+    ok: v.literal(true),
+    status: v.literal("approved"),
+    token: v.string(),
+    userId: v.string(),
+  }),
+]);
+
+const WhoamiResponseSchema = v.object({
+  ok: v.literal(true),
+  user: v.object({
+    id: v.string(),
+    handle: v.nullable(v.string()),
+    name: v.string(),
+    country: v.nullable(v.string()),
+  }),
+});
 
 export async function runLogin(opts: { open?: boolean } = {}): Promise<void> {
   const cfg = await readConfig();
@@ -26,12 +54,10 @@ export async function runLogin(opts: { open?: boolean } = {}): Promise<void> {
   if (!startRes.ok) {
     throw new Error(`failed to start login: HTTP ${startRes.status}`);
   }
-  const { code, userCode, verifyUrl, expiresAt } = (await startRes.json()) as {
-    code: string;
-    userCode: string;
-    verifyUrl: string;
-    expiresAt: string;
-  };
+  const { code, userCode, verifyUrl, expiresAt } = v.parse(
+    StartResponseSchema,
+    await startRes.json()
+  );
 
   process.stdout.write(
     `  ${pc.dim("verify code")}    ${pc.bold(userCode)}\n` +
@@ -66,9 +92,7 @@ export async function runLogin(opts: { open?: boolean } = {}): Promise<void> {
       continue;
     }
 
-    const result = (await pollRes.json()) as
-      | { ok: true; status: "pending" }
-      | { ok: true; status: "approved"; token: string; userId: string };
+    const result = v.parse(PollResponseSchema, await pollRes.json());
 
     if (result.status === "pending") {
       dotCount = (dotCount + 1) % 4;
@@ -120,10 +144,7 @@ export async function runWhoami(): Promise<void> {
     return;
   }
 
-  const body = (await res.json()) as {
-    ok: true;
-    user: { id: string; handle: string | null; name: string; country: string | null };
-  };
+  const body = v.parse(WhoamiResponseSchema, await res.json());
 
   process.stdout.write(
     `\n  ${pc.dim("user id")}   ${body.user.id}\n` +

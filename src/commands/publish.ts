@@ -1,6 +1,20 @@
 import pc from "picocolors";
+import * as v from "valibot";
 import { isAuthRejection, requireAuthedConfig } from "../config.js";
 import { buildPayloadFromScanOrExit } from "../buildPayload.js";
+
+const PublishResponseSchema = v.object({
+  ok: v.literal(true),
+  scope: v.string(),
+  score: v.object({
+    vibeBurn: v.number(),
+    vibeScore: v.number(),
+    level: v.number(),
+    title: v.string(),
+    flair: v.string(),
+    badges: v.array(v.string()),
+  }),
+});
 
 export async function runPublish(): Promise<void> {
   const cfg = await requireAuthedConfig();
@@ -33,7 +47,7 @@ export async function runPublish(): Promise<void> {
 
   if (isAuthRejection(res)) return;
   if (!res.ok) {
-    const text = await res.text().catch(() => "");
+    const text = await res.text().catch(() => "<no body>");
     process.stdout.write(
       `\n  ${pc.red("✕")} publish failed (HTTP ${res.status})\n  ${pc.dim(text.slice(0, 500))}\n\n`
     );
@@ -41,18 +55,7 @@ export async function runPublish(): Promise<void> {
     return;
   }
 
-  const body = (await res.json()) as {
-    ok: true;
-    scope: string;
-    score: {
-      vibeBurn: number;
-      vibeScore: number;
-      level: number;
-      title: string;
-      flair: string;
-      badges: string[];
-    };
-  };
+  const body = v.parse(PublishResponseSchema, await res.json());
 
   const handle = cfg.handle ?? cfg.userId ?? "(your handle)";
   const profileUrl = `${cfg.webUrl}/u/${handle}`;

@@ -59,30 +59,43 @@ export async function runDefault(opts: {
 
   process.stdout.write(renderReveal(computeRevealInput(summary, scope)));
 
-  const cfg = await readConfig();
+  let cfg = await readConfig();
   const authed = !!cfg.token && tokenMatchesHost(cfg);
 
-  if (cfg.autoPublish !== true) {
-    if (!process.stdin.isTTY) {
-      process.stdout.write(
-        `  ${pc.dim("Run")} ${pc.bold("vibeking publish")} ${pc.dim("to upload, or")} ${pc.bold("vibeking scan")} ${pc.dim("to scan only.")}\n\n`
-      );
-      return;
-    }
+  // Non-TTY (CI, piped stdin): we can't run an interactive login or prompt.
+  // Only proceed silently if the user already has both a valid token AND
+  // persisted `autoPublish: true`.
+  if (!process.stdin.isTTY && (!authed || !cfg.autoPublish)) {
+    process.stdout.write(
+      `  ${pc.dim("Run")} ${pc.bold("vibeking publish")} ${pc.dim("to upload, or")} ${pc.bold("vibeking scan")} ${pc.dim("to scan only.")}\n\n`
+    );
+    return;
+  }
+
+  if (!cfg.autoPublish) {
     const question = authed
       ? "Publish to vibeking.io?"
       : "Sign in with GitHub and publish to vibeking.io?";
     const yes = await confirm(question);
     process.stdout.write("\n");
     if (!yes) return;
-    // Persist consent before login/publish so a transient failure (network,
-    // server down) doesn't force the user to re-consent next run.
-    await writeConfig({ ...cfg, autoPublish: true });
   }
 
   if (!authed) {
+    // If login throws (timeout, oauth declined, network), the exception
+    // propagates and the consent flag below never gets written. Re-running
+    // bare `vibeking` will prompt again — exactly what we want.
     await runLogin({ open: opts.open });
+    cfg = await readConfig();
   }
+
+  // Persist consent only after we actually have a usable token. Done last so
+  // partial failures upstream can't strand the user with autoPublish=true
+  // but no auth.
+  if (!cfg.autoPublish) {
+    await writeConfig({ ...cfg, autoPublish: true });
+  }
+
   await runPublish();
 }
 

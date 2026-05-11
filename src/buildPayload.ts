@@ -5,22 +5,21 @@ import { scanClaudeCode } from "./scanner.js";
 import { CLI_VERSION } from "./version.js";
 
 // Shared by `publish` and `inspect-upload` so the two commands can't drift:
-// what inspect-upload prints is what publish would POST.
-
-export async function buildPayloadFromScan(): Promise<UploadPayload> {
-  const summary = await scanClaudeCode();
-  return buildUploadPayload({
-    source: "claude_code",
-    cliVersion: CLI_VERSION,
-    daily: summary.daily,
-  });
-}
+// what inspect-upload prints is what publish would POST. The OrExit variant
+// owns the user-facing ValiError UX (writes to stdout + sets exitCode); this
+// is a deliberate layer break — keeping the catch here means both callers
+// can't drift in how they report a malformed local scan.
 
 export async function buildPayloadFromScanOrExit(opts: {
   heading: string;
 }): Promise<UploadPayload | null> {
   try {
-    return await buildPayloadFromScan();
+    const summary = await scanClaudeCode();
+    return buildUploadPayload({
+      source: "claude_code",
+      cliVersion: CLI_VERSION,
+      daily: summary.daily,
+    });
   } catch (err) {
     if (err instanceof v.ValiError) {
       process.stdout.write(`\n  ${pc.red("✕")} ${opts.heading}:\n`);
