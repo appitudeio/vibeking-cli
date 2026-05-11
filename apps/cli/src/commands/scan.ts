@@ -143,7 +143,6 @@ function emptyScore(scope: "weekly" | "monthly" | "all_time"): Score {
     title: "Vibe Tourist",
     flair: "no scans yet",
     badges: [],
-    costUsd: 0,
     scoringVersion: SCORING_VERSION,
   };
 }

@@ -53,12 +53,6 @@ export type Score = {
    */
   noLifeIndex: number;
   /**
-   * API-equivalent USD — what the burn would have cost on the Anthropic
-   * API at list prices. Pro/Max subscribers don't actually pay this;
-   * that's the joke.
-   */
-  costUsd: number;
-  /**
    * Version tag of the formula that produced this score. Bump when
    * weights or axes change — old snapshots keep their tag so we can
    * explain rank shifts as "balance patches" instead of silent moves.

@@ -1,6 +1,11 @@
+// The CLI scores locally only to preview "you have data worth publishing."
+// Server is canonical for official VibeScore, rank, roast, and pricing.
+// If you're adding billing / eligibility / official-roast logic — that goes
+// server-side, not here. If you're renaming, consider Score → LocalPreview,
+// vibeScore → previewScore, etc. (not done today).
+
 import type { DailyAggregate, Score, ScoreInput } from "./types.js";
 import { getTitle } from "./titles.js";
-import { estimateCostUsd } from "./pricing.js";
 
 export const SCORING_VERSION = "v0.1";
 
@@ -197,10 +202,6 @@ export function buildScoreWithSummary(
     cacheWriteTokens: summary.totalCacheWriteTokens,
   });
 
-  const cutoff = scopeCutoff(scope);
-  const filtered = daily.filter((d) => d.date >= cutoff);
-  const costUsd = estimateCostUsd(filtered);
-
   const score: Score = {
     scope,
     vibeBurn,
@@ -210,7 +211,6 @@ export function buildScoreWithSummary(
     flair: titleResult.flair,
     badges: titleResult.badges,
     noLifeIndex: summary.weekendBurnRatio,
-    costUsd,
     scoringVersion: SCORING_VERSION,
   };
   return { score, summary };
