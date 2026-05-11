@@ -1,6 +1,6 @@
 # Payload
 
-The exact shape of what `vibeking publish` POSTs to the API. Defined in [`packages/core/src/redaction.ts`](./packages/core/src/redaction.ts) as `UploadPayloadSchema` and enforced with Zod `.strict()` — unknown keys throw before send.
+The exact shape of what `vibeking publish` POSTs to the API. Defined in [`src/core/redaction.ts`](./src/core/redaction.ts) as `UploadPayloadSchema` and enforced with Valibot `v.strictObject` — unknown keys throw before send.
 
 ## Top-level
 
@@ -30,7 +30,7 @@ The exact shape of what `vibeking publish` POSTs to the API. Defined in [`packag
 
 ## NOT included
 
-The schema is `.strict()` — anything not listed above causes the build to throw locally before the network request fires. The redaction test suite specifically covers:
+The schema is `v.strictObject` — anything not listed above causes the build to throw locally before the network request fires. The redaction test suite specifically covers:
 
 - `filePath` / file path-shaped strings → rejected
 - `/Users/...`, `~/...`, `C:\Users\...` strings inside `modelBreakdown` keys → rejected
@@ -39,11 +39,11 @@ The schema is `.strict()` — anything not listed above causes the build to thro
 - environment variables → rejected
 - repo names, project names, anything resembling a path component → rejected
 
-See [`packages/core/src/__tests__/redaction.test.ts`](./packages/core/src/__tests__/redaction.test.ts) for the concrete cases.
+See [`src/core/__tests__/redaction.test.ts`](./src/core/__tests__/redaction.test.ts) for the concrete cases, and [`src/core/__tests__/upload-payload-snapshot.test.ts`](./src/core/__tests__/upload-payload-snapshot.test.ts) for the fixture-based wire-format snapshot.
 
 ## Server-side validation
 
-The API validates the payload against the same `UploadPayloadSchema` on receipt, plus a second-stage anti-cheat gate for plausibility checks — impossible burn, future dates, oversize backfills, etc. The gate's rejection codes are part of the public wire contract and typed as `ScanRejectReason` in [`packages/core/src/responses.ts`](./packages/core/src/responses.ts).
+The API validates the payload against the same `UploadPayloadSchema` on receipt, plus a second-stage anti-cheat gate for plausibility checks — impossible burn, future dates, oversize backfills, etc. The gate's rejection codes are part of the public wire contract and typed as `ScanRejectReason` in [`src/core/responses.ts`](./src/core/responses.ts).
 
 The anti-cheat heuristics themselves live in the private platform repo — they have to, or attackers optimize around them.
 

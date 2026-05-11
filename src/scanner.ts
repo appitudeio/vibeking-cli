@@ -3,9 +3,9 @@ import { createReadStream, existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { createInterface } from "node:readline";
-import { isIsoDate, type DailyAggregate, type ScanSummary } from "@vibeking/core";
+import { isIsoDate, type DailyAggregate, type ScanSummary } from "./core/index.js";
 
-const CLAUDE_PROJECTS_DIR = join(homedir(), ".claude", "projects");
+const DEFAULT_CLAUDE_PROJECTS_DIR = join(homedir(), ".claude", "projects");
 
 type AssistantRecord = {
   type: "assistant";
@@ -22,12 +22,14 @@ type AssistantRecord = {
   };
 };
 
-export async function scanClaudeCode(): Promise<ScanSummary> {
-  if (!existsSync(CLAUDE_PROJECTS_DIR)) {
+export async function scanClaudeCode(
+  rootDir: string = DEFAULT_CLAUDE_PROJECTS_DIR
+): Promise<ScanSummary> {
+  if (!existsSync(rootDir)) {
     return emptySummary();
   }
 
-  const files = await collectJsonlFiles(CLAUDE_PROJECTS_DIR);
+  const files = await collectJsonlFiles(rootDir);
   const byDate = new Map<string, MutableDay>();
 
   for (const file of files) {

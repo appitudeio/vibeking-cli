@@ -1,4 +1,4 @@
-import type { DailyAggregate } from "@vibeking/core";
+import type { DailyAggregate } from "../core/index.js";
 
 export function pickTopModel(daily: DailyAggregate[]): {
   model: string | null;

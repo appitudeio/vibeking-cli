@@ -6,5 +6,4 @@ export default defineConfig({
   target: "node20",
   clean: true,
   shims: true,
-  noExternal: ["@vibeking/core"],
 });

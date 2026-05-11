@@ -4,8 +4,8 @@ import type { DailyAggregate, SourceType } from "./types.js";
 
 // ────────────────────────────────────────────────────────────
 // UploadPayloadSchema is the SINGLE source of truth for what the
-// CLI is allowed to send. Both the CLI (apps/cli/inspectUpload + publish)
-// and the API (apps/api/routes/scan) parse against this exact schema.
+// CLI is allowed to send. Both the CLI (commands/inspectUpload + publish)
+// and the server's scan route parse against this exact schema.
 //
 // Any field added here must also be:
 //   - rendered by `inspect-upload` (so users can verify it before publish)

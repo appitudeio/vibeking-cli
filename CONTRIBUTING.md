@@ -4,10 +4,10 @@ The VibeKing CLI is open source so users can trust the scanner. Contributions th
 
 ## Welcome with open arms
 
-- **New scanners** — Cursor, Windsurf, Codex, Aider, Continue, anything else with a local session archive. Drop a new file under [`apps/cli/src/scanners/`](./apps/cli/src/scanners/), wire it up to the upload payload. The `source` enum in [`packages/core/src/redaction.ts`](./packages/core/src/redaction.ts) needs to grow to match.
-- **New badges** — additions to [`packages/core/src/titles.ts`](./packages/core/src/titles.ts). Keep them in voice: snarky, self-aware, true. Avoid badges that punch down.
+- **New scanners** — Cursor, Windsurf, Codex, Aider, Continue, anything else with a local session archive. Add a new module alongside [`src/scanner.ts`](./src/scanner.ts), wire it up to the upload payload. The `source` enum in [`src/core/redaction.ts`](./src/core/redaction.ts) needs to grow to match.
+- **New badges** — additions to [`src/core/titles.ts`](./src/core/titles.ts). Keep them in voice: snarky, self-aware, true. Avoid badges that punch down.
 - **UX polish** — better terminal output, clearer error messages, faster scans, smaller payloads.
-- **Privacy hardening** — anything that tightens redaction or makes inspection easier. Tests under [`packages/core/src/__tests__/redaction.test.ts`](./packages/core/src/__tests__/redaction.test.ts) are the right place to add adversarial cases.
+- **Privacy hardening** — anything that tightens redaction or makes inspection easier. Tests under [`src/core/__tests__/redaction.test.ts`](./src/core/__tests__/redaction.test.ts) are the right place to add adversarial cases.
 - **Docs** — fix anything stale or unclear here, in [PRIVACY.md](./PRIVACY.md), or [PAYLOAD.md](./PAYLOAD.md).
 
 ## Needs more conversation
@@ -27,10 +27,10 @@ The VibeKing CLI is open source so users can trust the scanner. Contributions th
 
 ```bash
 pnpm install
-pnpm --filter vibeking dev     # CLI in dev (scans your real ~/.claude data)
-pnpm --filter vibeking test
-pnpm --filter vibeking typecheck
-pnpm --filter vibeking lint
+pnpm dev          # CLI in dev (scans your real ~/.claude data)
+pnpm test
+pnpm typecheck
+pnpm lint
 ```
 
 PRs should:

@@ -4,7 +4,7 @@ import {
   CreateLeagueResponseSchema,
   LeagueResponseSchema,
   MyLeaguesResponseSchema,
-} from "@vibeking/core";
+} from "../core/index.js";
 import { requireAuthedConfig } from "../util/requireAuth.js";
 
 const c = pc;

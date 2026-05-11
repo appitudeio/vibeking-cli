@@ -4,7 +4,7 @@ import {
   SCORING_VERSION,
   type Score,
   type ScanSummary,
-} from "@vibeking/core";
+} from "../core/index.js";
 import pc from "picocolors";
 import { scanClaudeCode } from "../scanner.js";
 import { renderReveal, renderEmptyState } from "../reveal.js";

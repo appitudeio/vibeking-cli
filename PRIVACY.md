@@ -10,7 +10,7 @@ The CLI reads files under `~/.claude/projects/*/memory.jsonl` — Claude Code's 
 - model names
 - token usage counts (`input_tokens`, `output_tokens`, `cache_creation_input_tokens`, `cache_read_input_tokens`)
 
-That's it. The scanner code is at [`apps/cli/src/scanners/claudeCode.ts`](./apps/cli/src/scanners/claudeCode.ts) — short enough to read in five minutes.
+That's it. The scanner code is at [`src/scanner.ts`](./src/scanner.ts) — short enough to read in five minutes.
 
 ## What gets uploaded
 
@@ -37,7 +37,7 @@ The payload schema is documented in [PAYLOAD.md](./PAYLOAD.md). Specifically:
 - machine identifiers (hostname, MAC, etc.)
 - environment variables
 
-The payload schema lives at [`packages/core/src/redaction.ts`](./packages/core/src/redaction.ts) and is enforced with Zod `.strict()` — any unknown field throws before the request leaves your machine. The test suite at [`packages/core/src/__tests__/redaction.test.ts`](./packages/core/src/__tests__/redaction.test.ts) covers this with concrete attack inputs (paths shaped like `/Users/victim/Code/secret-repo/api.ts`, fields named `filePath`, etc.).
+The payload schema lives at [`src/core/redaction.ts`](./src/core/redaction.ts) and is enforced with Valibot `v.strictObject` — any unknown field throws before the request leaves your machine. The test suite at [`src/core/__tests__/redaction.test.ts`](./src/core/__tests__/redaction.test.ts) covers this with concrete attack inputs (paths shaped like `/Users/victim/Code/secret-repo/api.ts`, fields named `filePath`, etc.). The [fixture-based payload snapshot test](./src/core/__tests__/upload-payload-snapshot.test.ts) also pins the wire format so refactors can't silently change it.
 
 ## How to verify
 
@@ -45,7 +45,7 @@ The payload schema lives at [`packages/core/src/redaction.ts`](./packages/core/s
 npx vibeking inspect-upload
 ```
 
-This prints the exact JSON that `vibeking publish` would send — same function, same arguments. The shared helper is [`apps/cli/src/util/buildPayload.ts`](./apps/cli/src/util/buildPayload.ts); both commands import it, so they cannot drift.
+This prints the exact JSON that `vibeking publish` would send — same function, same arguments. The shared helper is [`src/util/buildPayload.ts`](./src/util/buildPayload.ts); both commands import it, so they cannot drift.
 
 If you want to be extra sure: route the CLI through a local proxy and diff.
 

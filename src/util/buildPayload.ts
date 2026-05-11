@@ -1,6 +1,6 @@
 import pc from "picocolors";
 import * as v from "valibot";
-import { buildUploadPayload, type UploadPayload } from "@vibeking/core";
+import { buildUploadPayload, type UploadPayload } from "../core/index.js";
 import { scanClaudeCode } from "../scanner.js";
 import { CLI_VERSION } from "../version.js";
 

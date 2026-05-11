@@ -1,5 +1,5 @@
 import pc from "picocolors";
-import { formatBurn, type Score } from "@vibeking/core";
+import { formatBurn, type Score } from "./core/index.js";
 
 export type RevealInput = {
   score: Score;
