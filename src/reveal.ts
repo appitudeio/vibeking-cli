@@ -1,5 +1,5 @@
 import pc from "picocolors";
-import { formatBurn } from "./core/index.js";
+import { formatBurn } from "./core/format.js";
 
 // The offline reveal is intentionally thin: it shows observed facts and tells
 // the user to publish for the official title, rank, roast, card, and leagues.

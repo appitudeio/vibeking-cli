@@ -1,6 +1,6 @@
 import pc from "picocolors";
 import * as v from "valibot";
-import { buildUploadPayload, type UploadPayload } from "../core/index.js";
+import { buildUploadPayload, type UploadPayload } from "../core/redaction.js";
 import { scanClaudeCode } from "../scanner.js";
 import { CLI_VERSION } from "../version.js";
 
@@ -36,10 +36,7 @@ export async function buildPayloadFromScanOrExit(opts: {
     if (err instanceof v.ValiError) {
       process.stdout.write(`\n  ${c.red("✕")} ${opts.heading}:\n`);
       for (const issue of err.issues) {
-        const path =
-          issue.path
-            ?.map((p: { key: PropertyKey }) => String(p.key))
-            .join(".") ?? "";
+        const path = v.getDotPath(issue) ?? "";
         process.stdout.write(`    - ${path}: ${issue.message}\n`);
       }
       process.stdout.write("\n");

@@ -1,4 +1,3 @@
-import type { ScanSummary } from "../core/index.js";
 import pc from "picocolors";
 import { scanClaudeCode } from "../scanner.js";
 import { renderReveal, renderEmptyState } from "../reveal.js";
@@ -8,9 +7,7 @@ export type ScanOptions = {
   scope?: "weekly" | "monthly" | "all_time";
 };
 
-export async function runScan(opts: ScanOptions = {}): Promise<{
-  summary: ScanSummary;
-}> {
+export async function runScan(opts: ScanOptions = {}): Promise<void> {
   const scope = opts.scope ?? "weekly";
   const summary = await scanClaudeCode();
 
@@ -18,7 +15,7 @@ export async function runScan(opts: ScanOptions = {}): Promise<{
     process.stdout.write(
       renderEmptyState("No Claude Code sessions found in ~/.claude/projects.")
     );
-    return { summary };
+    return;
   }
 
   const cutoff = scopeCutoff(scope);
@@ -51,8 +48,6 @@ export async function runScan(opts: ScanOptions = {}): Promise<{
   process.stdout.write(
     `  ${pc.dim("inspect upload")}  ${pc.bold("vibeking inspect-upload")}  ${pc.dim("(see exactly what would be sent)")}\n\n`
   );
-
-  return { summary };
 }
 
 function scopeCutoff(scope: NonNullable<ScanOptions["scope"]>): string {

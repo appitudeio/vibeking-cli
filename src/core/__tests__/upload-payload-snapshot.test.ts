@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { scanClaudeCode } from "../../scanner.js";
+import { scanClaudeCodeDir } from "../../scanner.js";
 import { buildUploadPayload } from "../redaction.js";
 
 // Trust anchor: scanner + buildUploadPayload must produce a byte-stable
@@ -27,7 +27,7 @@ describe("upload payload snapshot (fixture → wire format)", () => {
   });
 
   it("produces the exact expected payload from the synthetic fixture", async () => {
-    const summary = await scanClaudeCode(FIXTURE_DIR);
+    const summary = await scanClaudeCodeDir(FIXTURE_DIR);
     const payload = buildUploadPayload({
       source: "claude_code",
       cliVersion: "0.0.0-test",

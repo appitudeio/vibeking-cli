@@ -3,9 +3,10 @@ import { createReadStream, existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { createInterface } from "node:readline";
-import { isIsoDate, type DailyAggregate, type ScanSummary } from "./core/index.js";
+import { isIsoDate } from "./core/dateUtils.js";
+import type { DailyAggregate, ScanSummary } from "./core/types.js";
 
-const DEFAULT_CLAUDE_PROJECTS_DIR = join(homedir(), ".claude", "projects");
+const CLAUDE_PROJECTS_DIR = join(homedir(), ".claude", "projects");
 
 type AssistantRecord = {
   type: "assistant";
@@ -22,9 +23,15 @@ type AssistantRecord = {
   };
 };
 
-export async function scanClaudeCode(
-  rootDir: string = DEFAULT_CLAUDE_PROJECTS_DIR
-): Promise<ScanSummary> {
+export function scanClaudeCode(): Promise<ScanSummary> {
+  return scanClaudeCodeDir(CLAUDE_PROJECTS_DIR);
+}
+
+/**
+ * Same scan, against an explicit projects directory. Used by the fixture-
+ * based payload snapshot test; not part of the public CLI surface.
+ */
+export async function scanClaudeCodeDir(rootDir: string): Promise<ScanSummary> {
   if (!existsSync(rootDir)) {
     return emptySummary();
   }
