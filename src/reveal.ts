@@ -1,5 +1,5 @@
 import pc from "picocolors";
-import type { Scope } from "./core/types.js";
+import type { Scope } from "./types.js";
 
 // The offline reveal is intentionally thin: it shows observed facts and tells
 // the user to publish for the official title, rank, roast, card, and leagues.

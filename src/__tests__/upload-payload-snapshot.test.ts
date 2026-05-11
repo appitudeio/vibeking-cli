@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { scanClaudeCodeDir } from "../../scanner.js";
+import { scanClaudeCodeDir } from "../scanner.js";
 import { buildUploadPayload } from "../redaction.js";
 
 // Trust anchor: scanner + buildUploadPayload must produce a byte-stable
@@ -11,7 +11,7 @@ import { buildUploadPayload } from "../redaction.js";
 
 const FIXTURE_DIR = join(
   dirname(fileURLToPath(import.meta.url)),
-  "../../../test/fixtures/claude-projects"
+  "../../test/fixtures/claude-projects"
 );
 
 const FROZEN_NOW = new Date("2026-01-20T12:00:00.000Z");

@@ -1,5 +1,5 @@
 import pc from "picocolors";
-import type { Scope, ScanSummary } from "../core/types.js";
+import type { Scope, ScanSummary } from "../types.js";
 import { scanClaudeCode } from "../scanner.js";
 import { renderReveal, renderEmptyState, type RevealInput } from "../reveal.js";
 import { pickTopModel } from "../util/topModel.js";

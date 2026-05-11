@@ -38,10 +38,13 @@ The offline CLI shows only facts about your local Claude Code usage. The officia
 src/
   index.ts            CLI entry point + arg parser
   scanner.ts          Reads ~/.claude/projects/*/memory.jsonl
+  redaction.ts        UploadPayloadSchema — the security gate
+  types.ts            Shared types (Scope, DailyAggregate, ScanSummary)
   reveal.ts           Offline reveal output (facts + publish CTA)
-  commands/           scan, publish, inspectUpload, help, auth
-  util/               buildPayload, config, requireAuth, openUrl, topModel
-  core/               redaction schema, types, format, dateUtils
+  version.ts          CLI version constant
+  commands/           scan (+ default flow), publish, inspectUpload, help, auth
+  util/               buildPayload, config, prompt, openUrl, topModel
+  __tests__/          redaction + payload-snapshot tests
 test/fixtures/        Synthetic Claude Code data for the payload snapshot test
 ```
 
@@ -53,7 +56,7 @@ The whole pitch hinges on three things:
 
 1. **The scanner is right here.** [`src/scanner.ts`](./src/scanner.ts) is short enough to read in five minutes. It reads `~/.claude/projects/*/memory.jsonl`, pulls timestamps + model names + token counts, and that's it.
 2. **The payload builder is shared.** [`src/util/buildPayload.ts`](./src/util/buildPayload.ts) is the one function that turns local data into something uploadable. Both `vibeking publish` and `vibeking inspect-upload` call it — they cannot drift.
-3. **The schema is `strictObject`-enforced.** [`src/core/redaction.ts`](./src/core/redaction.ts) defines `UploadPayloadSchema` with Valibot `v.strictObject` — any unknown key throws before the request leaves your machine. The [redaction tests](./src/core/__tests__/redaction.test.ts) and the [fixture-based payload snapshot](./src/core/__tests__/upload-payload-snapshot.test.ts) cover prompt/path-shaped leaks and wire-format stability.
+3. **The schema is `strictObject`-enforced.** [`src/redaction.ts`](./src/redaction.ts) defines `UploadPayloadSchema` with Valibot `v.strictObject` — any unknown key throws before the request leaves your machine. The [redaction tests](./src/__tests__/redaction.test.ts) and the [fixture-based payload snapshot](./src/__tests__/upload-payload-snapshot.test.ts) cover prompt/path-shaped leaks and wire-format stability.
 
 ## Develop
 

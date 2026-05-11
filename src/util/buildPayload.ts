@@ -1,6 +1,6 @@
 import pc from "picocolors";
 import * as v from "valibot";
-import { buildUploadPayload, type UploadPayload } from "../core/redaction.js";
+import { buildUploadPayload, type UploadPayload } from "../redaction.js";
 import { scanClaudeCode } from "../scanner.js";
 import { CLI_VERSION } from "../version.js";
 

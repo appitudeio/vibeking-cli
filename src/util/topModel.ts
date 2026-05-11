@@ -1,4 +1,4 @@
-import type { DailyAggregate } from "../core/types.js";
+import type { DailyAggregate } from "../types.js";
 
 export function pickTopModel(daily: DailyAggregate[]): {
   model: string | null;

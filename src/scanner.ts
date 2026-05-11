@@ -3,8 +3,8 @@ import { createReadStream } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { createInterface } from "node:readline";
-import { isIsoDate } from "./core/redaction.js";
-import type { DailyAggregate, ScanSummary } from "./core/types.js";
+import { isIsoDate } from "./redaction.js";
+import type { DailyAggregate, ScanSummary } from "./types.js";
 
 const CLAUDE_PROJECTS_DIR = join(homedir(), ".claude", "projects");
 

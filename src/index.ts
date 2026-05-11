@@ -4,7 +4,7 @@ import { runInspectUpload } from "./commands/inspectUpload.js";
 import { runHelp } from "./commands/help.js";
 import { runLogin, runLogout, runWhoami } from "./commands/auth.js";
 import { runPublish } from "./commands/publish.js";
-import type { Scope } from "./core/types.js";
+import type { Scope } from "./types.js";
 
 type Command =
   | "default"

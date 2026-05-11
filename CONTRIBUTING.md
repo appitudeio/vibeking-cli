@@ -4,14 +4,14 @@ The VibeKing CLI is open source so users can trust the scanner. Contributions th
 
 ## Welcome with open arms
 
-- **New scanners** — Cursor, Windsurf, Codex, Aider, Continue, anything else with a local session archive. Add a new module alongside [`src/scanner.ts`](./src/scanner.ts), wire it up to the upload payload. The `source` enum in [`src/core/redaction.ts`](./src/core/redaction.ts) needs to grow to match.
+- **New scanners** — Cursor, Windsurf, Codex, Aider, Continue, anything else with a local session archive. Add a new module alongside [`src/scanner.ts`](./src/scanner.ts), wire it up to the upload payload. The `source` enum in [`src/redaction.ts`](./src/redaction.ts) needs to grow to match.
 - **UX polish** — better terminal output, clearer error messages, faster scans, smaller payloads.
-- **Privacy hardening** — anything that tightens redaction or makes inspection easier. Tests under [`src/core/__tests__/redaction.test.ts`](./src/core/__tests__/redaction.test.ts) are the right place to add adversarial cases.
+- **Privacy hardening** — anything that tightens redaction or makes inspection easier. Tests under [`src/__tests__/redaction.test.ts`](./src/__tests__/redaction.test.ts) are the right place to add adversarial cases.
 - **Docs** — fix anything stale or unclear here, in [PRIVACY.md](./PRIVACY.md), or [PAYLOAD.md](./PAYLOAD.md).
 
 ## Needs more conversation
 
-- **Anything that changes the upload payload shape.** The wire format is the contract with the server; changing it touches [`src/core/redaction.ts`](./src/core/redaction.ts), the redaction tests, the fixture-based snapshot test, [PAYLOAD.md](./PAYLOAD.md), and the server. Open an issue first.
+- **Anything that changes the upload payload shape.** The wire format is the contract with the server; changing it touches [`src/redaction.ts`](./src/redaction.ts), the redaction tests, the fixture-based snapshot test, [PAYLOAD.md](./PAYLOAD.md), and the server. Open an issue first.
 - **Reveal output changes.** The offline reveal is intentionally a fact panel with a publish CTA — not a leaderboard card. Anything that adds a score, level, rank, badges, or roast to the CLI conflicts with the trust-layer boundary; that work belongs server-side.
 
 ## Won't merge

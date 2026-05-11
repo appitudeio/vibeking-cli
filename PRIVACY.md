@@ -37,7 +37,7 @@ The payload schema is documented in [PAYLOAD.md](./PAYLOAD.md). Specifically:
 - machine identifiers (hostname, MAC, etc.)
 - environment variables
 
-The payload schema lives at [`src/core/redaction.ts`](./src/core/redaction.ts) and is enforced with Valibot `v.strictObject` — any unknown field throws before the request leaves your machine. The test suite at [`src/core/__tests__/redaction.test.ts`](./src/core/__tests__/redaction.test.ts) covers this with concrete attack inputs (paths shaped like `/Users/victim/Code/secret-repo/api.ts`, fields named `filePath`, etc.). The [fixture-based payload snapshot test](./src/core/__tests__/upload-payload-snapshot.test.ts) also pins the wire format so refactors can't silently change it.
+The payload schema lives at [`src/redaction.ts`](./src/redaction.ts) and is enforced with Valibot `v.strictObject` — any unknown field throws before the request leaves your machine. The test suite at [`src/__tests__/redaction.test.ts`](./src/__tests__/redaction.test.ts) covers this with concrete attack inputs (paths shaped like `/Users/victim/Code/secret-repo/api.ts`, fields named `filePath`, etc.). The [fixture-based payload snapshot test](./src/__tests__/upload-payload-snapshot.test.ts) also pins the wire format so refactors can't silently change it.
 
 ## How to verify
 
