@@ -10,7 +10,27 @@ export type DailyAggregate = {
   cacheReadTokens: number;
   cacheWriteTokens: number;
   sessions: number;
+  assistantMessages: number;
+  toolCalls: number;
+  toolErrors: number;
+  totalActiveMinutes: number;
+  longestSessionMinutes: number;
+  filesTouched: number;
+  linesAdded: number;
+  linesRemoved: number;
+  hookErrors: number;
+  responseLatencyMsP50: number;
+  responseLatencyMsP95: number;
+  projectsActive: number;
+  gitBranchesActive: number;
+  mcpServersUsed: number;
+  sidechainMessages: number;
   modelBreakdown: Record<string, number>;
+  toolUseBreakdown: Record<string, number>;
+  stopReasonBreakdown: Record<string, number>;
+  permissionModeBreakdown: Record<string, number>;
+  hookEventCounts: Record<string, number>;
+  hourHistogramLocal: number[];
 };
 
 export type ScanSummary = {

@@ -6,7 +6,7 @@ The exact shape of what `vibeking publish` POSTs to the API. Defined in [`src/re
 
 ```ts
 {
-  schemaVersion: 1,                 // bumped on breaking shape changes
+  schemaVersion: 3,                 // bumped on breaking shape changes
   source: "claude_code",            // only source supported today
   cliVersion: string,               // semver-ish, e.g. "0.0.1"
   scannedAt: string,                // ISO 8601 datetime
@@ -24,9 +24,37 @@ The exact shape of what `vibeking publish` POSTs to the API. Defined in [`src/re
   cacheReadTokens: number,          // >= 0, integer
   cacheWriteTokens: number,         // >= 0, integer
   sessions: number,                 // >= 0, integer (count of distinct Claude Code sessions on that date)
-  modelBreakdown: Record<string, number>   // model name → input tokens for that model, on that day; max 32 keys
+  assistantMessages: number,        // >= 0, integer (total assistant turns on that date)
+  toolCalls: number,                // >= 0, integer (total tool_use blocks emitted by the assistant)
+  toolErrors: number,               // >= 0, integer (count of tool_result blocks with is_error: true)
+  totalActiveMinutes: number,       // >= 0, integer, max 1440 — sum of session durations that day
+  longestSessionMinutes: number,    // >= 0, integer, max 1440 — longest single session that day
+  filesTouched: number,             // >= 0, integer — distinct file paths seen in Read/Edit/Write/MultiEdit/NotebookEdit/NotebookRead tool_use inputs; paths discarded after counting, only count ships
+  linesAdded: number,               // >= 0, integer — sum of newline deltas added across Edit/Write/MultiEdit
+  linesRemoved: number,             // >= 0, integer — symmetric: removed lines
+  hookErrors: number,               // >= 0, integer — count of attachment records with non-zero exitCode
+  responseLatencyMsP50: number,     // >= 0, integer, max 3_600_000 — median time between user record and next assistant record in a session
+  responseLatencyMsP95: number,     // >= 0, integer, max 3_600_000 — p95 of the same
+  projectsActive: number,           // >= 0, integer, max 10_000 — distinct cwd strings; strings discarded after counting
+  gitBranchesActive: number,        // >= 0, integer, max 10_000 — distinct gitBranch strings; strings discarded
+  mcpServersUsed: number,           // >= 0, integer, max 10_000 — distinct MCP server prefixes; server names discarded
+  sidechainMessages: number,        // >= 0, integer — assistant turns where isSidechain was true
+  modelBreakdown: Record<string, number>,                  // model name → fraction of assistant turns; max 32 keys
+  toolUseBreakdown: Record<ToolKey, number>,               // tool name → fraction of toolCalls
+  stopReasonBreakdown: Record<StopReason, number>,         // stop_reason → fraction of assistant turns
+  permissionModeBreakdown: Record<PermissionMode, number>, // permission mode → fraction of mode-change events
+  hookEventCounts: Record<HookEvent, number>,              // hook event name → count of attachments fired
+  hourHistogramLocal: number[]      // length 24; assistant turns by local hour-of-day (machine TZ at scan time)
 }
 ```
+
+`ToolKey` is a closed allowlist of Claude Code built-in tools (Bash, Read, Edit, Write, MultiEdit, Grep, Glob, NotebookRead, NotebookEdit, WebFetch, WebSearch, Task, TodoWrite, TodoRead, ExitPlanMode, Skill, AskUserQuestion, ScheduleWakeup, ShareOnboardingGuide, ToolSearch, Monitor, Agent) plus two buckets: `mcp` (any `mcp__*` tool name is collapsed here so installed-server names don't leak) and `other`.
+
+`StopReason` is a closed allowlist of Anthropic API values: `end_turn`, `tool_use`, `max_tokens`, `stop_sequence`, `pause_turn`, `refusal`, plus two buckets: `none` (the record had `stop_reason: null` — Claude Code logs parallel tool calls as separate records and intermediate ones carry null) and `other` (forward-compat for values added to the Anthropic API after this CLI shipped).
+
+`PermissionMode` is a closed allowlist: `default`, `acceptEdits`, `plan`, `bypassPermissions`, `auto`, `bubble`, plus `other` for forward-compat with new modes.
+
+`HookEvent` is a closed allowlist of Claude Code hook event names: `SessionStart`, `UserPromptSubmit`, `PreToolUse`, `PostToolUse`, `Stop`, `SubagentStop`, `Notification`, `SessionEnd`, `PreCompact`, plus `other` for forward-compat.
 
 ## NOT included
 

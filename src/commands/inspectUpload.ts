@@ -17,6 +17,6 @@ export async function runInspectUpload(): Promise<void> {
 
   process.stdout.write(JSON.stringify(payload, null, 2) + "\n\n");
   process.stdout.write(
-    `  ${pc.green("✓")} ${pc.dim("only token counts, dates, model breakdowns. no prompts, code, or paths.")}\n\n`
+    `  ${pc.green("✓")} ${pc.dim("only counts and ratios — tokens, tools, sessions, files, lines, hooks. no prompts, code, or paths.")}\n\n`
   );
 }
