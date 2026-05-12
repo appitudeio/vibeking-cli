@@ -1,67 +1,89 @@
 import * as v from "valibot";
-import { KNOWN_MARKETPLACE_TOKENS } from "./generated/marketplace-tokens.js";
+import { KNOWN_MARKETPLACE_INVOCATIONS } from "./generated/marketplace-tokens.js";
 import type { DailyAggregate, SourceType } from "./types.js";
 
-/** Hand-curated supplement for public-marketplace skills that
- * claudemarketplaces.com hasn't indexed (yet) but that we've verified are
- * real public GitHub plugins. Keep this list short and justify each entry
- * inline — anyone reading the trust gate should be able to verify the
- * GitHub repo exists and is public. */
-const CURATED_PUBLIC_TOKENS = [
-  // The db-query Claude Code skill: a popular database query helper.
-  // Real public plugin; not yet indexed at claudemarketplaces.com.
+// ────────────────────────────────────────────────────────────
+// Skill / subagent_type classification (the trust gate)
+//
+// Both schemas validate user-emitted strings against an EXACT-MATCH set:
+// either the full invocation string is in `KNOWN_MARKETPLACE_INVOCATIONS`
+// (auto-synced from claudemarketplaces.com), or it's in the hand-curated
+// supplement below, or it's the "other" bucket, or (for subagents) it's
+// a built-in CC agent.
+//
+// We deliberately do NOT do prefix matching like `s.split(":")[0] in set`.
+// A previous version of this file did, and recheck:deep found two
+// CRITICAL privacy issues with that design:
+//   1. Short marketplace tokens (`ai`, `cli`, `pdf`) collide with private
+//      namespaces — `ai:omni-internal-strategy` would have shipped raw.
+//   2. Namespace squatting — anyone publishing a public plugin named
+//      `omni` would have globally relaxed every user's filter.
+// Exact-match closes both classes by construction. The schema is enforced
+// at runtime via `v.check` rather than `v.picklist` because the token set
+// is too large (~2300 entries) for a literal-union TS type — but the
+// runtime gate is identical.
+// ────────────────────────────────────────────────────────────
+
+/** Hand-curated supplement for popular public skills the auto-sync misses.
+ * Keep this list short and justify each entry inline — anyone reading the
+ * trust gate should be able to verify the GitHub repo exists and is
+ * public. */
+const CURATED_PUBLIC_INVOCATIONS = [
+  // db-query: popular DB query helper. Real public plugin; not yet
+  // indexed at claudemarketplaces.com.
   "db-query",
-  // SlidevJS-adjacent plugins (slidev-design, slidev-visual-qa). Real
-  // public plugins; partial index coverage.
+  // SlidevJS plugins. Real public plugins; partial index coverage —
+  // the namespaced forms aren't in the sitemap but appear in real data.
   "slidev-design",
   "slidev-visual-qa",
-  // The single-name `obsidian` skill family. The marketplace index has
-  // related plugins like obsidian-markdown, obsidian-cli, etc., but the
-  // bare `obsidian` name we see in real data isn't directly indexed.
+  // `obsidian`: the bare-name form. The sitemap indexes `obsidian-cli`,
+  // `obsidian-markdown`, etc., but not the bare name we see in real data.
   "obsidian",
+  // Marketplace SUBAGENT types. claudemarketplaces.com/sitemap.xml only
+  // indexes `/skills/...` URLs; agents declared inside plugins (in their
+  // marketplace.json `agents` array) don't surface in our auto-sync.
+  // These are well-known public agents from the official Anthropic
+  // marketplace (github.com/anthropics/claude-plugins-official); verified
+  // by browsing each plugin's repo.
+  "superpowers:code-reviewer",
+  "code-review-ai:architect-review",
+  "cloud-infrastructure:cloud-architect",
+  "backend-development:backend-architect",
+  "security-scanning:security-auditor",
+  "unit-testing:test-automator",
 ];
 
-const KNOWN_MARKETPLACE_TOKENS_SET = new Set<string>([
-  ...KNOWN_MARKETPLACE_TOKENS,
-  ...CURATED_PUBLIC_TOKENS,
-]);
-
-/** Built-in Claude Code subagent types — shipped with the CLI itself, not
- * a marketplace. Hardcoded because they don't appear in any marketplace
- * registry. Keep this list in lock-step with Claude Code's actual built-in
- * agents (currently documented at code.claude.com/docs). */
-export const BUILTIN_SUBAGENT_TYPES = [
+/** Built-in Claude Code subagent types — shipped with CC itself, not a
+ * marketplace. Hardcoded because they don't appear in any marketplace
+ * registry. Keep in lock-step with code.claude.com/docs. */
+const BUILTIN_SUBAGENT_TYPES = [
   "general-purpose",
   "Explore",
   "Plan",
   "claude-code-guide",
   "statusline-setup",
 ] as const;
+
+const KNOWN_MARKETPLACE_INVOCATIONS_SET = new Set<string>([
+  ...KNOWN_MARKETPLACE_INVOCATIONS,
+  ...CURATED_PUBLIC_INVOCATIONS,
+]);
 const BUILTIN_SUBAGENT_TYPES_SET = new Set<string>(BUILTIN_SUBAGENT_TYPES);
 
-/** A skill name is shippable if it's the explicit "other" bucket OR if it
- * matches a public-marketplace token (either as a single name like
- * "db-query", or as a namespace prefix like "superpowers:..."). Tokens are
- * sourced from claudemarketplaces.com/sitemap.xml via the sync script. */
+/** A skill invocation is shippable iff it's the explicit "other" bucket OR
+ * the exact string appears in the marketplace allowlist. No prefix
+ * expansion (see header comment for the rationale). */
 export function isShippableSkillName(s: string): boolean {
   if (s === "other") return true;
-  return matchesMarketplaceToken(s);
+  return KNOWN_MARKETPLACE_INVOCATIONS_SET.has(s);
 }
 
-/** A subagent_type is shippable if it's "other", a built-in CC agent, or
- * a public-marketplace token (same rules as skills — many marketplace
- * agents reuse the plugin/skill namespace). */
+/** A subagent_type is shippable iff it's "other", a built-in CC agent, or
+ * the exact string appears in the marketplace allowlist. */
 export function isShippableSubagentType(s: string): boolean {
   if (s === "other") return true;
   if (BUILTIN_SUBAGENT_TYPES_SET.has(s)) return true;
-  return matchesMarketplaceToken(s);
-}
-
-function matchesMarketplaceToken(s: string): boolean {
-  if (KNOWN_MARKETPLACE_TOKENS_SET.has(s)) return true;
-  const colon = s.indexOf(":");
-  if (colon <= 0) return false;
-  return KNOWN_MARKETPLACE_TOKENS_SET.has(s.slice(0, colon));
+  return KNOWN_MARKETPLACE_INVOCATIONS_SET.has(s);
 }
 
 /** Matches a YYYY-MM-DD string with valid month (01-12) and day (01-31).
