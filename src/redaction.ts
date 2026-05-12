@@ -1,5 +1,68 @@
 import * as v from "valibot";
+import { KNOWN_MARKETPLACE_TOKENS } from "./generated/marketplace-tokens.js";
 import type { DailyAggregate, SourceType } from "./types.js";
+
+/** Hand-curated supplement for public-marketplace skills that
+ * claudemarketplaces.com hasn't indexed (yet) but that we've verified are
+ * real public GitHub plugins. Keep this list short and justify each entry
+ * inline — anyone reading the trust gate should be able to verify the
+ * GitHub repo exists and is public. */
+const CURATED_PUBLIC_TOKENS = [
+  // The db-query Claude Code skill: a popular database query helper.
+  // Real public plugin; not yet indexed at claudemarketplaces.com.
+  "db-query",
+  // SlidevJS-adjacent plugins (slidev-design, slidev-visual-qa). Real
+  // public plugins; partial index coverage.
+  "slidev-design",
+  "slidev-visual-qa",
+  // The single-name `obsidian` skill family. The marketplace index has
+  // related plugins like obsidian-markdown, obsidian-cli, etc., but the
+  // bare `obsidian` name we see in real data isn't directly indexed.
+  "obsidian",
+];
+
+const KNOWN_MARKETPLACE_TOKENS_SET = new Set<string>([
+  ...KNOWN_MARKETPLACE_TOKENS,
+  ...CURATED_PUBLIC_TOKENS,
+]);
+
+/** Built-in Claude Code subagent types — shipped with the CLI itself, not
+ * a marketplace. Hardcoded because they don't appear in any marketplace
+ * registry. Keep this list in lock-step with Claude Code's actual built-in
+ * agents (currently documented at code.claude.com/docs). */
+export const BUILTIN_SUBAGENT_TYPES = [
+  "general-purpose",
+  "Explore",
+  "Plan",
+  "claude-code-guide",
+  "statusline-setup",
+] as const;
+const BUILTIN_SUBAGENT_TYPES_SET = new Set<string>(BUILTIN_SUBAGENT_TYPES);
+
+/** A skill name is shippable if it's the explicit "other" bucket OR if it
+ * matches a public-marketplace token (either as a single name like
+ * "db-query", or as a namespace prefix like "superpowers:..."). Tokens are
+ * sourced from claudemarketplaces.com/sitemap.xml via the sync script. */
+export function isShippableSkillName(s: string): boolean {
+  if (s === "other") return true;
+  return matchesMarketplaceToken(s);
+}
+
+/** A subagent_type is shippable if it's "other", a built-in CC agent, or
+ * a public-marketplace token (same rules as skills — many marketplace
+ * agents reuse the plugin/skill namespace). */
+export function isShippableSubagentType(s: string): boolean {
+  if (s === "other") return true;
+  if (BUILTIN_SUBAGENT_TYPES_SET.has(s)) return true;
+  return matchesMarketplaceToken(s);
+}
+
+function matchesMarketplaceToken(s: string): boolean {
+  if (KNOWN_MARKETPLACE_TOKENS_SET.has(s)) return true;
+  const colon = s.indexOf(":");
+  if (colon <= 0) return false;
+  return KNOWN_MARKETPLACE_TOKENS_SET.has(s.slice(0, colon));
+}
 
 /** Matches a YYYY-MM-DD string with valid month (01-12) and day (01-31).
  * Doesn't catch impossible dates like Feb 30 — `isIsoDate` round-trips
@@ -124,86 +187,15 @@ export const NAMED_HOOK_EVENTS = [
 ] as const;
 const HOOK_EVENT_KEYS = [...NAMED_HOOK_EVENTS, "other"] as const;
 
-/** Curated list of skill names from PUBLIC Claude Code marketplaces. The
- * names below are discoverable on GitHub — shipping them adds no PII beyond
- * "this user has installed a thing anyone could install." User-specific /
- * unpublished skill names (`brain:*`, `gsd-*`, internal codenames) collapse
- * to `other` in the scanner. Extend this list as new public marketplace
- * skills become popular. */
-export const NAMED_SKILLS = [
-  // superpowers (https://github.com/obra/superpowers).
-  // `superpowers:code-reviewer` is shipped as BOTH a skill and a subagent
-  // type — see NAMED_SUBAGENT_TYPES below; keep the two listings in sync.
-  "superpowers:brainstorming",
-  "superpowers:using-superpowers",
-  "superpowers:test-driven-development",
-  "superpowers:using-git-worktrees",
-  "superpowers:code-reviewer",
-  // frontend-design
-  "frontend-design:frontend-design",
-  // browser / scraping / presentation
-  "playwright-cli",
-  "firecrawl-scrape",
-  "firecrawl-search",
-  "firecrawl-crawl",
-  "firecrawl-map",
-  "firecrawl-download",
-  "firecrawl-agent",
-  "firecrawl-instruct",
-  "slidev-design",
-  "slidev-visual-qa",
-  // data / docs
-  "db-query",
-  "obsidian",
-  "gdpr-compliance",
-  // paperclip plugin family
-  "paperclip",
-  "paperclip-create-agent",
-  "paperclip-create-plugin",
-  "para-memory-files",
-  // plaud
-  "plaud-sync",
-] as const;
-const SKILL_KEYS = [...NAMED_SKILLS, "other"] as const;
-
-/** Built-in subagent types + public-marketplace agent types observed in
- * production. Same allowlist semantics as NAMED_SKILLS. */
-export const NAMED_SUBAGENT_TYPES = [
-  // Built-in Claude Code agents
-  "general-purpose",
-  "Explore",
-  "Plan",
-  "claude-code-guide",
-  "statusline-setup",
-  // Public marketplace agents (namespaced).
-  // `superpowers:code-reviewer` also appears in NAMED_SKILLS — keep the
-  // two listings in sync.
-  "superpowers:code-reviewer",
-  "code-review-ai:architect-review",
-  "cloud-infrastructure:cloud-architect",
-  "backend-development:backend-architect",
-  "security-scanning:security-auditor",
-  "unit-testing:test-automator",
-  // vercel plugin family
-  "vercel:ai-architect",
-  "vercel:deployment-expert",
-  "vercel:performance-optimizer",
-] as const;
-const SUBAGENT_TYPE_KEYS = [...NAMED_SUBAGENT_TYPES, "other"] as const;
-
 const ToolKeySchema = v.picklist(TOOL_KEYS);
 const StopReasonKeySchema = v.picklist(STOP_REASON_KEYS);
 const PermissionModeKeySchema = v.picklist(PERMISSION_MODE_KEYS);
 const HookEventKeySchema = v.picklist(HOOK_EVENT_KEYS);
-const SkillKeySchema = v.picklist(SKILL_KEYS);
-const SubagentTypeKeySchema = v.picklist(SUBAGENT_TYPE_KEYS);
 
 export type ToolKey = (typeof TOOL_KEYS)[number];
 export type StopReasonKey = (typeof STOP_REASON_KEYS)[number];
 export type PermissionModeKey = (typeof PERMISSION_MODE_KEYS)[number];
 export type HookEventKey = (typeof HOOK_EVENT_KEYS)[number];
-export type SkillKey = (typeof SKILL_KEYS)[number];
-export type SubagentTypeKey = (typeof SUBAGENT_TYPE_KEYS)[number];
 
 const ShareValueSchema = v.pipe(v.number(), v.minValue(0), v.maxValue(1));
 
@@ -236,10 +228,25 @@ const PermissionModeBreakdownSchema = v.record(
   ShareValueSchema
 );
 
-const SkillBreakdownSchema = v.record(SkillKeySchema, ShareValueSchema);
+const SkillBreakdownSchema = v.record(
+  v.pipe(
+    v.string(),
+    v.check(
+      isShippableSkillName,
+      "skillBreakdown keys must be from a public marketplace (claudemarketplaces.com) or the 'other' bucket"
+    )
+  ),
+  ShareValueSchema
+);
 
 const SubagentTypeBreakdownSchema = v.record(
-  SubagentTypeKeySchema,
+  v.pipe(
+    v.string(),
+    v.check(
+      isShippableSubagentType,
+      "subagentTypeBreakdown keys must be a built-in CC agent, public-marketplace token, or 'other'"
+    )
+  ),
   ShareValueSchema
 );
 

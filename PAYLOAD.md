@@ -62,9 +62,9 @@ The exact shape of what `vibeking publish` POSTs to the API. Defined in [`src/re
 
 `HookEvent` is a closed allowlist of Claude Code hook event names: `SessionStart`, `UserPromptSubmit`, `PreToolUse`, `PostToolUse`, `Stop`, `SubagentStop`, `Notification`, `SessionEnd`, `PreCompact`, plus `other` for forward-compat.
 
-`SkillKey` is a closed allowlist of skill names from **public** Claude Code marketplaces (`superpowers:*`, `frontend-design:*`, `playwright-cli`, `firecrawl-*`, `slidev-*`, `db-query`, `obsidian`, `gdpr-compliance`, `paperclip*`, `para-memory-files`, `plaud-sync`, …), plus `other` for user-specific / unpublished skill names which the scanner buckets without leaving the machine. Marketplace skill names are already public on GitHub; user-installed plugin names (`brain:*`, `gsd-*`, internal codenames) collapse to `other`.
+`skillBreakdown` keys are validated against an auto-synced token set: any skill name whose value (or the segment before its `:` namespace) appears in either (a) the daily-refreshed token list at [`src/generated/marketplace-tokens.ts`](./src/generated/marketplace-tokens.ts) (1,400+ tokens sourced from [claudemarketplaces.com/sitemap.xml](https://claudemarketplaces.com/sitemap.xml) via `pnpm sync-marketplace`), or (b) a small hand-curated supplement in [`src/redaction.ts`](./src/redaction.ts) (`CURATED_PUBLIC_TOKENS`) for popular plugins the index has missed. Everything else collapses to `other` at the scanner. User-installed plugin names (`brain:*`, `gsd-*`, internal codenames) never leave the machine.
 
-`SubagentTypeKey` is a closed allowlist of built-in Claude Code subagents (`general-purpose`, `Explore`, `Plan`, `claude-code-guide`, `statusline-setup`) plus public marketplace agents (`superpowers:code-reviewer`, `code-review-ai:architect-review`, `cloud-infrastructure:cloud-architect`, `backend-development:backend-architect`, `security-scanning:security-auditor`, `unit-testing:test-automator`, `vercel:*`, …), plus `other` for user-defined subagent types.
+`subagentTypeBreakdown` keys are validated against the union of (a) built-in Claude Code subagent types (`general-purpose`, `Explore`, `Plan`, `claude-code-guide`, `statusline-setup`), (b) the same auto-synced marketplace tokens used for skills (because marketplace agents reuse plugin namespaces), and (c) `other`.
 
 ## NOT included
 

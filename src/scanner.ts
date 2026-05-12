@@ -5,19 +5,17 @@ import { join } from "node:path";
 import { createInterface } from "node:readline";
 import {
   isIsoDate,
+  isShippableSkillName,
+  isShippableSubagentType,
   MAX_LINES_PER_DAY,
   NAMED_TOOLS,
   NAMED_STOP_REASONS,
   NAMED_PERMISSION_MODES,
   NAMED_HOOK_EVENTS,
-  NAMED_SKILLS,
-  NAMED_SUBAGENT_TYPES,
   type ToolKey,
   type StopReasonKey,
   type PermissionModeKey,
   type HookEventKey,
-  type SkillKey,
-  type SubagentTypeKey,
 } from "./redaction.js";
 import type { DailyAggregate, ScanSummary } from "./types.js";
 
@@ -51,8 +49,6 @@ const KNOWN_TOOLS = new Set<string>(NAMED_TOOLS);
 const KNOWN_STOP_REASONS = new Set<string>(NAMED_STOP_REASONS);
 const KNOWN_PERMISSION_MODES = new Set<string>(NAMED_PERMISSION_MODES);
 const KNOWN_HOOK_EVENTS = new Set<string>(NAMED_HOOK_EVENTS);
-const KNOWN_SKILLS = new Set<string>(NAMED_SKILLS);
-const KNOWN_SUBAGENT_TYPES = new Set<string>(NAMED_SUBAGENT_TYPES);
 
 // Tools whose input.file_path is a real local file path. Used for
 // filesTouched (count only) — the strings stay in scanner memory inside
@@ -197,8 +193,8 @@ type MutableDay = {
   stopReasons: Map<StopReasonKey, number>;
   permissionModes: Map<PermissionModeKey, number>;
   hookEvents: Map<HookEventKey, number>;
-  skills: Map<SkillKey, number>;
-  subagentTypes: Map<SubagentTypeKey, number>;
+  skills: Map<string, number>;
+  subagentTypes: Map<string, number>;
   hourHistogramLocal: number[];
   // Strings live here for the scan duration, but only .size is read into
   // the DailyAggregate that `finalizeDay` returns. MutableDay is module-
@@ -236,8 +232,8 @@ function makeDay(date: string): MutableDay {
     stopReasons: new Map<StopReasonKey, number>(),
     permissionModes: new Map<PermissionModeKey, number>(),
     hookEvents: new Map<HookEventKey, number>(),
-    skills: new Map<SkillKey, number>(),
-    subagentTypes: new Map<SubagentTypeKey, number>(),
+    skills: new Map<string, number>(),
+    subagentTypes: new Map<string, number>(),
     hourHistogramLocal: new Array<number>(24).fill(0),
     touchedPaths: new Set<string>(),
     cwds: new Set<string>(),
@@ -730,22 +726,16 @@ function normalizeHookEvent(raw: string | undefined): HookEventKey | null {
   return isKnownHookEvent(raw) ? raw : "other";
 }
 
-function isKnownSkill(s: string): s is Exclude<SkillKey, "other"> {
-  return KNOWN_SKILLS.has(s);
+// Public-marketplace classification lives in redaction.ts (the trust gate)
+// and is driven by the auto-synced token list at src/generated/.
+// The scanner just delegates: if the predicate accepts the raw name, keep
+// it; otherwise bucket to "other".
+function normalizeSkillName(raw: string): string {
+  return isShippableSkillName(raw) ? raw : "other";
 }
 
-function normalizeSkillName(raw: string): SkillKey {
-  return isKnownSkill(raw) ? raw : "other";
-}
-
-function isKnownSubagentType(
-  s: string
-): s is Exclude<SubagentTypeKey, "other"> {
-  return KNOWN_SUBAGENT_TYPES.has(s);
-}
-
-function normalizeSubagentType(raw: string): SubagentTypeKey {
-  return isKnownSubagentType(raw) ? raw : "other";
+function normalizeSubagentType(raw: string): string {
+  return isShippableSubagentType(raw) ? raw : "other";
 }
 
 async function collectJsonlFiles(root: string): Promise<string[]> {

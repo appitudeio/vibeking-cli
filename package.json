@@ -17,6 +17,7 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint src/",
     "test": "TZ=UTC vitest run",
+    "sync-marketplace": "tsx scripts/sync-marketplace.ts",
     "clean": "rm -rf dist *.tsbuildinfo"
   },
   "keywords": [
