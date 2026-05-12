@@ -31,7 +31,9 @@ const FILE_CONCURRENCY = 8;
 // The upload payload schema caps `daily` at 366 entries (see redaction.ts).
 // Trim before returning so a multi-year user's `publish` doesn't silently
 // fail validation; they get the most recent year, which is what matters for
-// rank anyway.
+// rank anyway. Peak memory during scan is unbounded in days (byDate keeps
+// every day until finalize) — bounded only by how much history Claude Code
+// has logged. For a 1000-day user that's ~1000 MutableDay objects in flight.
 const MAX_DAILY_ENTRIES = 366;
 
 // Outliers: latencies > 1h are "left it sitting overnight", not real waits.
@@ -63,6 +65,13 @@ const PATH_TOOLS = new Set<string>([
   "NotebookRead",
   "NotebookEdit",
 ]);
+
+// Tools that dispatch a sub-agent. Claude Code 1.x used `Task`; 2.x renamed
+// it to `Agent`. We accept both because real session files in the wild
+// contain a mix. If 3.x renames again, add the new name here AND extend
+// the regression test in redaction.test.ts that asserts >1 entry — that's
+// the test specifically guarding against silent zero-out.
+const SUBAGENT_DISPATCH_TOOLS = new Set<string>(["Task", "Agent"]);
 
 type AssistantContentBlock =
   | { type: "tool_use"; name?: string; input?: Record<string, unknown> }
@@ -262,6 +271,8 @@ function finalizeDay(d: MutableDay): DailyAggregate {
   const assistantMessages = sumMap(d.stopReasons);
   const toolCalls = sumMap(d.tools);
   const permissionModeChanges = sumMap(d.permissionModes);
+  const skillInvocations = sumMap(d.skills);
+  const subagentInvocations = sumMap(d.subagentTypes);
 
   const { p50, p95 } = percentiles(d.latenciesMs);
 
@@ -300,8 +311,8 @@ function finalizeDay(d: MutableDay): DailyAggregate {
     stopReasonBreakdown: shareMap(d.stopReasons, assistantMessages),
     permissionModeBreakdown: shareMap(d.permissionModes, permissionModeChanges),
     hookEventCounts: Object.fromEntries(d.hookEvents),
-    skillBreakdown: shareMap(d.skills, sumMap(d.skills)),
-    subagentTypeBreakdown: shareMap(d.subagentTypes, sumMap(d.subagentTypes)),
+    skillBreakdown: shareMap(d.skills, skillInvocations),
+    subagentTypeBreakdown: shareMap(d.subagentTypes, subagentInvocations),
     hourHistogramLocal: d.hourHistogramLocal.slice(),
   };
 }
@@ -354,8 +365,15 @@ async function parseFile(
   // before any dated record are dropped — buffering was deemed not worth
   // the complexity (mode toggles essentially always follow the first dated
   // record).
+  //
+  // worktree-state records ALSO have no timestamp, but cmux-style files
+  // routinely emit them BEFORE the first dated record. Buffering pre-date
+  // counts and flushing on the first dated record we see preserves the
+  // signal — these files are exactly the cohort `worktreeEvents` is meant
+  // to identify.
   let lastDate: string | null = null;
   let lastUserMs: number | null = null;
+  let pendingWorktreeEvents = 0;
 
   try {
     for await (const line of rl) {
@@ -380,12 +398,24 @@ async function parseFile(
         // in the middle of a session would leave a stale user timestamp
         // that paired (and inflated) the next valid latency sample.
         lastUserMs = null;
-        if (dateInfo) lastDate = dateInfo.date;
+        if (dateInfo) {
+          if (lastDate === null && pendingWorktreeEvents > 0) {
+            byDate.get(dateInfo.date)!.worktreeEvents += pendingWorktreeEvents;
+            pendingWorktreeEvents = 0;
+          }
+          lastDate = dateInfo.date;
+        }
       } else if (type === "user") {
         const ur = rec as UserRecord;
         const ts = parseTs(ur.timestamp);
         const dateInfo = ingestUser(ur, byDate);
-        if (dateInfo) lastDate = dateInfo.date;
+        if (dateInfo) {
+          if (lastDate === null && pendingWorktreeEvents > 0) {
+            byDate.get(dateInfo.date)!.worktreeEvents += pendingWorktreeEvents;
+            pendingWorktreeEvents = 0;
+          }
+          lastDate = dateInfo.date;
+        }
         if (ts !== null) lastUserMs = ts;
       } else if (type === "permission-mode") {
         if (!lastDate) continue;
@@ -394,19 +424,29 @@ async function parseFile(
         incrementMap(byDate.get(lastDate)!.permissionModes, mode);
       } else if (type === "attachment") {
         const dateInfo = ingestAttachment(rec as AttachmentRecord, byDate);
-        if (dateInfo) lastDate = dateInfo.date;
+        if (dateInfo) {
+          if (lastDate === null && pendingWorktreeEvents > 0) {
+            byDate.get(dateInfo.date)!.worktreeEvents += pendingWorktreeEvents;
+            pendingWorktreeEvents = 0;
+          }
+          lastDate = dateInfo.date;
+        }
       } else if (type === "worktree-state") {
-        // No timestamp on these records — attribute via cursor (same as
-        // permission-mode). Records before any dated record in the file
-        // are dropped.
-        if (!lastDate) continue;
-        byDate.get(lastDate)!.worktreeEvents += 1;
+        // No timestamp on these records — attribute via cursor (or buffer
+        // until the first dated record arrives, since cmux-style files
+        // routinely emit a worktree-state at line 0).
+        if (lastDate) byDate.get(lastDate)!.worktreeEvents += 1;
+        else pendingWorktreeEvents += 1;
       } else if (type === "file-history-snapshot") {
         // Timestamp lives at snapshot.timestamp (nested ISO).
         const fhs = rec as FileHistorySnapshotRecord;
         const info = dayFor(fhs.snapshot?.timestamp, byDate);
         if (info) {
           info.day.fileHistorySnapshots += 1;
+          if (lastDate === null && pendingWorktreeEvents > 0) {
+            info.day.worktreeEvents += pendingWorktreeEvents;
+            pendingWorktreeEvents = 0;
+          }
           lastDate = info.date;
         }
       }
@@ -554,21 +594,18 @@ function ingestToolUseInput(
         addLineDelta(day, obj.old_string, obj.new_string);
       }
     }
-  } else if (toolName === "Skill" && typeof input.skill === "string" && input.skill) {
+  } else if (toolName === "Skill") {
+    const skill = input.skill;
+    if (typeof skill !== "string" || skill === "") return;
     // input.args carries user-intent text and is NEVER read.
-    day.skillsSeen.add(input.skill);
-    incrementMap(day.skills, normalizeSkillName(input.skill));
-  } else if (
-    // Claude Code 1.x dispatched subagents via "Task"; 2.x renamed it to
-    // "Agent". Real data shows the user's recent sessions use "Agent" almost
-    // exclusively. Both tools carry input.subagent_type identically.
-    (toolName === "Task" || toolName === "Agent") &&
-    typeof input.subagent_type === "string" &&
-    input.subagent_type
-  ) {
+    day.skillsSeen.add(skill);
+    incrementMap(day.skills, normalizeSkillName(skill));
+  } else if (SUBAGENT_DISPATCH_TOOLS.has(toolName)) {
+    const subagentType = input.subagent_type;
+    if (typeof subagentType !== "string" || subagentType === "") return;
     // input.prompt and input.description carry user content; NEVER read.
-    day.subagentTypesSeen.add(input.subagent_type);
-    incrementMap(day.subagentTypes, normalizeSubagentType(input.subagent_type));
+    day.subagentTypesSeen.add(subagentType);
+    incrementMap(day.subagentTypes, normalizeSubagentType(subagentType));
   }
 }
 

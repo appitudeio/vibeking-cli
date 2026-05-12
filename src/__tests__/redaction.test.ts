@@ -554,3 +554,48 @@ describe("UploadPayloadSchema", () => {
     }
   });
 });
+
+describe("isIsoDate", () => {
+  it("rejects regex-passing but impossible dates", () => {
+    // Round-trip through Date catches these — they pass the YYYY-MM-DD
+    // structure but aren't real calendar dates.
+    const okDate = {
+      ...validInput.daily[0]!,
+      // Feb 30 normalizes to Mar 02 via Date(), so round-trip rejects.
+      date: "2026-02-30",
+    };
+    const res = v.safeParse(UploadPayloadSchema, {
+      ...validInput,
+      daily: [okDate],
+    });
+    expect(res.success).toBe(false);
+  });
+
+  it("rejects 0000-00-00 phantom dates", () => {
+    const res = v.safeParse(UploadPayloadSchema, {
+      ...validInput,
+      daily: [{ ...validInput.daily[0]!, date: "0000-00-00" }],
+    });
+    expect(res.success).toBe(false);
+  });
+
+  it("rejects out-of-range months and days", () => {
+    for (const bad of ["2026-13-01", "2026-00-15", "2026-05-00", "2026-05-32"]) {
+      const res = v.safeParse(UploadPayloadSchema, {
+        ...validInput,
+        daily: [{ ...validInput.daily[0]!, date: bad }],
+      });
+      expect(res.success, `expected ${bad} to be rejected`).toBe(false);
+    }
+  });
+
+  it("accepts real calendar dates including leap days", () => {
+    for (const ok of ["2024-02-29", "2026-12-31", "2000-01-01"]) {
+      const res = v.safeParse(UploadPayloadSchema, {
+        ...validInput,
+        daily: [{ ...validInput.daily[0]!, date: ok }],
+      });
+      expect(res.success, `expected ${ok} to pass`).toBe(true);
+    }
+  });
+});

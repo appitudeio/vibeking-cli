@@ -67,7 +67,7 @@ describe("upload payload snapshot (fixture → wire format)", () => {
           sidechainMessages: 1,
           skillsUsed: 0,
           subagentTypesUsed: 0,
-          worktreeEvents: 0,
+          worktreeEvents: 1,
           fileHistorySnapshots: 0,
           modelBreakdown: {
             "claude-opus-4-7": 0.5,
@@ -133,7 +133,8 @@ describe("upload payload snapshot (fixture → wire format)", () => {
             Bash: 0.1429,
             mcp: 0.1429,
             Skill: 0.2857,
-            Task: 0.2857,
+            Task: 0.1429,
+            Agent: 0.1429,
           },
           stopReasonBreakdown: {
             tool_use: 0.3333,
@@ -161,5 +162,32 @@ describe("upload payload snapshot (fixture → wire format)", () => {
         },
       ],
     });
+  });
+
+  // The fixture's Skill `input.args` and Task/Agent `input.prompt` carry
+  // explicit canary strings ("private prompt — never read", "private context
+  // — never read"). If a future refactor accidentally surfaces those fields
+  // into the payload, this test fails loudly. Same logic as the path-shape
+  // tests in redaction.test.ts but for the freeform-text inputs that Tier
+  // 1.6 newly touches.
+  it("never includes Skill args or Task/Agent prompt content in the payload", async () => {
+    const summary = await scanClaudeCodeDir(FIXTURE_DIR);
+    const payload = buildUploadPayload({
+      source: "claude_code",
+      cliVersion: "0.0.0-test",
+      daily: summary.daily,
+    });
+    const json = JSON.stringify(payload);
+    for (const canary of [
+      "private prompt — never read",
+      "private context — never read",
+      "query users",
+      "should-not-leak",
+    ]) {
+      expect(
+        json.includes(canary),
+        `payload leaked fixture canary "${canary}"`
+      ).toBe(false);
+    }
   });
 });

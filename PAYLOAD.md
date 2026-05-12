@@ -40,7 +40,7 @@ The exact shape of what `vibeking publish` POSTs to the API. Defined in [`src/re
   mcpServersUsed: number,           // >= 0, integer, max 10_000 — distinct MCP server prefixes; server names discarded
   sidechainMessages: number,        // >= 0, integer — assistant turns where isSidechain was true
   skillsUsed: number,               // >= 0, integer, max 10_000 — distinct input.skill values across Skill tool calls; names discarded after counting
-  subagentTypesUsed: number,        // >= 0, integer, max 10_000 — distinct input.subagent_type values across Task tool calls; names discarded
+  subagentTypesUsed: number,        // >= 0, integer, max 10_000 — distinct input.subagent_type values across Task / Agent tool calls (Claude Code 1.x / 2.x); names discarded
   worktreeEvents: number,           // >= 0, integer — count of type:"worktree-state" records (cmux/worktree power-user signal)
   fileHistorySnapshots: number,     // >= 0, integer — count of type:"file-history-snapshot" records
   modelBreakdown: Record<string, number>,                  // model name → fraction of assistant turns; max 32 keys
@@ -49,7 +49,7 @@ The exact shape of what `vibeking publish` POSTs to the API. Defined in [`src/re
   permissionModeBreakdown: Record<PermissionMode, number>, // permission mode → fraction of mode-change events
   hookEventCounts: Record<HookEvent, number>,              // hook event name → count of attachments fired
   skillBreakdown: Record<SkillKey, number>,                // skill name → fraction of Skill invocations; user-specific names collapse to `other`
-  subagentTypeBreakdown: Record<SubagentTypeKey, number>,  // subagent_type → fraction of Task invocations; user-specific names collapse to `other`
+  subagentTypeBreakdown: Record<SubagentTypeKey, number>,  // subagent_type → fraction of Task / Agent invocations; user-specific names collapse to `other`
   hourHistogramLocal: number[]      // length 24; assistant turns by local hour-of-day (machine TZ at scan time)
 }
 ```

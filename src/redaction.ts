@@ -1,12 +1,20 @@
 import * as v from "valibot";
 import type { DailyAggregate, SourceType } from "./types.js";
 
-/** Matches a YYYY-MM-DD string; doesn't validate the date itself. */
-export const ISO_DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
+/** Matches a YYYY-MM-DD string with valid month (01-12) and day (01-31).
+ * Doesn't catch impossible dates like Feb 30 — `isIsoDate` round-trips
+ * through `Date.parse` for that. */
+export const ISO_DATE_REGEX =
+  /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$/;
 
-/** True when the input is a well-formed YYYY-MM-DD string. */
+/** True when `s` is a real calendar date in YYYY-MM-DD form. Rejects both
+ * structural garbage ("0000-00-00", "9999-99-99") and structurally-valid
+ * but impossible dates (Feb 30, Apr 31) by round-tripping through Date. */
 export function isIsoDate(s: string): boolean {
-  return ISO_DATE_REGEX.test(s);
+  if (!ISO_DATE_REGEX.test(s)) return false;
+  const ms = Date.parse(`${s}T00:00:00Z`);
+  if (!Number.isFinite(ms)) return false;
+  return new Date(ms).toISOString().slice(0, 10) === s;
 }
 
 // ────────────────────────────────────────────────────────────
@@ -123,7 +131,9 @@ const HOOK_EVENT_KEYS = [...NAMED_HOOK_EVENTS, "other"] as const;
  * to `other` in the scanner. Extend this list as new public marketplace
  * skills become popular. */
 export const NAMED_SKILLS = [
-  // superpowers (https://github.com/obra/superpowers)
+  // superpowers (https://github.com/obra/superpowers).
+  // `superpowers:code-reviewer` is shipped as BOTH a skill and a subagent
+  // type — see NAMED_SUBAGENT_TYPES below; keep the two listings in sync.
   "superpowers:brainstorming",
   "superpowers:using-superpowers",
   "superpowers:test-driven-development",
@@ -165,7 +175,9 @@ export const NAMED_SUBAGENT_TYPES = [
   "Plan",
   "claude-code-guide",
   "statusline-setup",
-  // Public marketplace agents (namespaced)
+  // Public marketplace agents (namespaced).
+  // `superpowers:code-reviewer` also appears in NAMED_SKILLS — keep the
+  // two listings in sync.
   "superpowers:code-reviewer",
   "code-review-ai:architect-review",
   "cloud-infrastructure:cloud-architect",
@@ -276,7 +288,7 @@ const HookEventCountsSchema = v.record(HookEventKeySchema, CountSchema);
 const DailyAggregateSchema = v.strictObject({
   date: v.pipe(
     v.string(),
-    v.regex(ISO_DATE_REGEX, "date must be YYYY-MM-DD")
+    v.check(isIsoDate, "date must be a real YYYY-MM-DD calendar date")
   ),
   inputTokens: v.pipe(
     v.number(),
