@@ -27,23 +27,11 @@ const RateLimitedSchema = v.object({
 });
 
 /**
- * Derive a friendly label for this CLI install. The server stores it
- * verbatim as display text — never trusted for anti-cheat. Includes
- * hostname + platform + arch + CLI version so the user can tell which
- * machine is which on the settings page.
- *
- * `hostname()` may be sensitive (employer-issued machine names, etc.) so
- * we surface it only in the label, never in any anti-cheat signal.
- *
- * Sanitizes for the platform edge cases that bit us in /recheck:deep #5:
- * - empty hostname (misconfigured Linux containers, K8s without
- *   `hostname` set) → "unknown-host" so the label isn't a bare " · darwin"
- * - control bytes (NUL / CR / LF) on some platforms → replaced with "?"
- *   so the server doesn't store a string that breaks log greps later
- * - host part capped at 64 chars so a pathological hostname can't crowd
- *   out the platform/version suffix in the 128-char overall budget
- *
- * Not exported — only the same-file caller `ensureInstallation` uses it.
+ * Friendly display label for the settings UI. Server stores verbatim;
+ * never trusted for anti-cheat. Hostname can be sensitive (employer-
+ * issued machine names) — surfaced only here, never in a forensic signal.
+ * Host slice reserves room for the platform/version suffix in the
+ * 128-char total budget.
  */
 function deriveInstallationLabel(): string {
   const rawHost = hostname().trim();

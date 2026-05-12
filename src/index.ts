@@ -4,10 +4,7 @@ import { runInspectUpload } from "./commands/inspectUpload.js";
 import { runHelp } from "./commands/help.js";
 import { runLogin, runLogout, runWhoami } from "./commands/auth.js";
 import { runPublish } from "./commands/publish.js";
-import {
-  runInstallationsHelp,
-  runInstallationsReset,
-} from "./commands/installations.js";
+import { runInstallations } from "./commands/installations.js";
 import type { Scope } from "./types.js";
 
 type Command =
@@ -19,11 +16,12 @@ type Command =
   | "logout"
   | "whoami"
   | "publish"
-  | "installations:reset"
-  | "installations:help";
+  | "installations";
 
 type ParsedArgs = {
   command: Command;
+  /** Sub-token after the command name — used by multi-verb commands. */
+  subcommand: string | undefined;
   scope: Scope;
   open: boolean;
 };
@@ -34,7 +32,7 @@ function parseArgs(argv: string[]): ParsedArgs {
   let scope: Scope = "weekly";
 
   const first = args[0];
-  const second = args[1];
+  const subcommand = args[1];
   if (first && !first.startsWith("-")) {
     if (first === "scan") command = "scan";
     else if (first === "inspect-upload" || first === "inspect") command = "inspect-upload";
@@ -43,9 +41,8 @@ function parseArgs(argv: string[]): ParsedArgs {
     else if (first === "logout") command = "logout";
     else if (first === "whoami") command = "whoami";
     else if (first === "publish") command = "publish";
-    else if (first === "installations") {
-      command = second === "reset" ? "installations:reset" : "installations:help";
-    } else command = "default";
+    else if (first === "installations") command = "installations";
+    else command = "default";
   } else if (args.includes("--help") || args.includes("-h")) {
     command = "help";
   }
@@ -54,11 +51,11 @@ function parseArgs(argv: string[]): ParsedArgs {
   if (args.includes("--all") || args.includes("--all-time")) scope = "all_time";
   const open = !args.includes("--no-open");
 
-  return { command, scope, open };
+  return { command, subcommand, scope, open };
 }
 
 async function main(): Promise<void> {
-  const { command, scope, open } = parseArgs(process.argv);
+  const { command, subcommand, scope, open } = parseArgs(process.argv);
 
   switch (command) {
     case "default":
@@ -85,11 +82,8 @@ async function main(): Promise<void> {
     case "publish":
       await runPublish();
       return;
-    case "installations:reset":
-      await runInstallationsReset();
-      return;
-    case "installations:help":
-      runInstallationsHelp();
+    case "installations":
+      await runInstallations(subcommand);
       return;
   }
 }

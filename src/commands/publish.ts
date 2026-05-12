@@ -11,6 +11,7 @@ import {
   clearCachedInstallation,
   InstallationRegistrationError,
 } from "../installation.js";
+import { assertNever } from "../assertNever.js";
 
 const PublishResponseSchema = v.object({
   ok: v.literal(true),
@@ -25,10 +26,9 @@ const PublishResponseSchema = v.object({
   }),
 });
 
-// Mirrors @vibeking/core's InstallationErrorCodeSchema. Single source for
-// the picklist + the exhaustive switch — if either side adds a new code,
-// add it to this const and TS will refuse to build until the runPublish
-// switch handles it (via the `never` assertion at the bottom).
+// Mirrors @vibeking/core's InstallationErrorCodeSchema. Single source
+// for the type union AND the runtime check — adding a code here forces
+// the runPublish switch's `never` exhaustiveness to fail.
 const INSTALLATION_ERROR_CODES = [
   "installation_required",
   "installation_unknown",
@@ -37,17 +37,14 @@ const INSTALLATION_ERROR_CODES = [
 ] as const;
 type InstallationErrorCode = (typeof INSTALLATION_ERROR_CODES)[number];
 
-const InstallationErrorResponseSchema = v.object({
-  ok: v.literal(false),
-  error: v.picklist(INSTALLATION_ERROR_CODES),
-  message: v.string(),
-});
+function isInstallationErrorCode(s: string): s is InstallationErrorCode {
+  return (INSTALLATION_ERROR_CODES as readonly string[]).includes(s);
+}
 
-// Loose envelope used when the body has the right shape but the `error`
-// code isn't one the CLI knows. Surfaces the server's `message` rather
-// than burying it in a generic HTTP-error dump — happens if the server
-// adds a 5th code before the CLI catches up.
-const LooseErrorEnvelopeSchema = v.object({
+// Permissive error envelope — accepts any string `error` code. The
+// installation-error vs unknown-server-error split happens at the
+// `isInstallationErrorCode` narrowing in submitScan, not via two schemas.
+const ErrorEnvelopeSchema = v.object({
   ok: v.literal(false),
   error: v.string(),
   message: v.optional(v.string()),
@@ -87,38 +84,29 @@ async function submitScan(
 
   if (!res.ok) {
     const rawBody = await res.text().catch(() => "<no body>");
-    // Step 1: JSON parse. If this fails the response isn't structured —
-    // misconfigured proxy, HTML 502 page, etc. Fall through to the
-    // generic HTTP-error dump.
     let json: unknown;
     try {
       json = JSON.parse(rawBody);
     } catch {
       return { kind: "other_http_error", status: res.status, body: rawBody };
     }
-    // Step 2: try the strict installation-error schema. Matches → known
-    // typed code, dispatch by `code` in runPublish.
-    const strict = v.safeParse(InstallationErrorResponseSchema, json);
-    if (strict.success) {
+    const parsed = v.safeParse(ErrorEnvelopeSchema, json);
+    if (!parsed.success) {
+      return { kind: "other_http_error", status: res.status, body: rawBody };
+    }
+    const { error: code, message } = parsed.output;
+    if (isInstallationErrorCode(code)) {
       return {
         kind: "installation_error",
-        code: strict.output.error,
-        message: strict.output.message,
+        code,
+        message: message ?? "",
       };
     }
-    // Step 3: structurally valid envelope but unknown code. Surface
-    // server message cleanly — don't bury in a 500-char raw-body dump.
-    const loose = v.safeParse(LooseErrorEnvelopeSchema, json);
-    if (loose.success) {
-      return {
-        kind: "unknown_server_error",
-        code: loose.output.error,
-        message: loose.output.message ?? "<no message>",
-      };
-    }
-    // Step 4: well-formed JSON but not even a `{ ok:false, error:string }`
-    // envelope. Generic HTTP error.
-    return { kind: "other_http_error", status: res.status, body: rawBody };
+    return {
+      kind: "unknown_server_error",
+      code,
+      message: message ?? "<no message>",
+    };
   }
 
   const body = v.parse(PublishResponseSchema, await res.json());
@@ -215,17 +203,8 @@ export async function runPublish(): Promise<void> {
         );
         process.exitCode = 1;
         return;
-      default: {
-        // Exhaustiveness check — if a new code is added to
-        // INSTALLATION_ERROR_CODES without a case here, TS narrows
-        // `outcome` to `never` because the case statements above
-        // exhausted all possible values of `outcome.code`. Without this
-        // const assignment the compiler doesn't surface that miss.
-        const _exhaustive: never = outcome;
-        throw new Error(
-          `unhandled installation error code: ${JSON.stringify(_exhaustive)}`
-        );
-      }
+      default:
+        return assertNever(outcome);
     }
   }
 

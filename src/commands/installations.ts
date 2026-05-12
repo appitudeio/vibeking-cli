@@ -2,23 +2,20 @@ import pc from "picocolors";
 import { readConfig } from "../config.js";
 import { clearCachedInstallation } from "../installation.js";
 
+/** Top-level dispatcher for `vibeking installations [subcommand]`. */
+export async function runInstallations(subcommand: string | undefined): Promise<void> {
+  if (subcommand === "reset") {
+    await runInstallationsReset();
+    return;
+  }
+  runInstallationsHelp();
+}
+
 /**
- * `vibeking installations reset` — wipe the locally-cached installationId
- * + installationHost. The next publish will register a fresh installation
- * against the current apiUrl. Auth token is untouched (installation
- * identity and auth credential are separate; logout is its own command).
- *
- * Surfaced as the recovery hint in `publish.ts` for two cases:
- *   - `installation_revoked`: user revoked this installation; running
- *     reset lets them register a new one without `logout` losing their
- *     leaderboard handle.
- *   - `installation_not_owned`: the cached id belongs to another user
- *     (e.g. config copied from another machine).
- *
- * The CLI cleared the id automatically in both cases too, so calling
- * this command after the error is also a no-op — that's fine.
+ * Wipe the locally-cached installationId. Auth token is untouched —
+ * installation identity and auth credential are separate.
  */
-export async function runInstallationsReset(): Promise<void> {
+async function runInstallationsReset(): Promise<void> {
   const cfg = await readConfig();
   if (!cfg.installationId) {
     process.stdout.write(
@@ -35,7 +32,7 @@ export async function runInstallationsReset(): Promise<void> {
   );
 }
 
-export function runInstallationsHelp(): void {
+function runInstallationsHelp(): void {
   process.stdout.write(
     [
       "",
