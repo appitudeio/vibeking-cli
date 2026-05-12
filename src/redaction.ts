@@ -116,15 +116,82 @@ export const NAMED_HOOK_EVENTS = [
 ] as const;
 const HOOK_EVENT_KEYS = [...NAMED_HOOK_EVENTS, "other"] as const;
 
+/** Curated list of skill names from PUBLIC Claude Code marketplaces. The
+ * names below are discoverable on GitHub — shipping them adds no PII beyond
+ * "this user has installed a thing anyone could install." User-specific /
+ * unpublished skill names (`brain:*`, `gsd-*`, internal codenames) collapse
+ * to `other` in the scanner. Extend this list as new public marketplace
+ * skills become popular. */
+export const NAMED_SKILLS = [
+  // superpowers (https://github.com/obra/superpowers)
+  "superpowers:brainstorming",
+  "superpowers:using-superpowers",
+  "superpowers:test-driven-development",
+  "superpowers:using-git-worktrees",
+  "superpowers:code-reviewer",
+  // frontend-design
+  "frontend-design:frontend-design",
+  // browser / scraping / presentation
+  "playwright-cli",
+  "firecrawl-scrape",
+  "firecrawl-search",
+  "firecrawl-crawl",
+  "firecrawl-map",
+  "firecrawl-download",
+  "firecrawl-agent",
+  "firecrawl-instruct",
+  "slidev-design",
+  "slidev-visual-qa",
+  // data / docs
+  "db-query",
+  "obsidian",
+  "gdpr-compliance",
+  // paperclip plugin family
+  "paperclip",
+  "paperclip-create-agent",
+  "paperclip-create-plugin",
+  "para-memory-files",
+  // plaud
+  "plaud-sync",
+] as const;
+const SKILL_KEYS = [...NAMED_SKILLS, "other"] as const;
+
+/** Built-in subagent types + public-marketplace agent types observed in
+ * production. Same allowlist semantics as NAMED_SKILLS. */
+export const NAMED_SUBAGENT_TYPES = [
+  // Built-in Claude Code agents
+  "general-purpose",
+  "Explore",
+  "Plan",
+  "claude-code-guide",
+  "statusline-setup",
+  // Public marketplace agents (namespaced)
+  "superpowers:code-reviewer",
+  "code-review-ai:architect-review",
+  "cloud-infrastructure:cloud-architect",
+  "backend-development:backend-architect",
+  "security-scanning:security-auditor",
+  "unit-testing:test-automator",
+  // vercel plugin family
+  "vercel:ai-architect",
+  "vercel:deployment-expert",
+  "vercel:performance-optimizer",
+] as const;
+const SUBAGENT_TYPE_KEYS = [...NAMED_SUBAGENT_TYPES, "other"] as const;
+
 const ToolKeySchema = v.picklist(TOOL_KEYS);
 const StopReasonKeySchema = v.picklist(STOP_REASON_KEYS);
 const PermissionModeKeySchema = v.picklist(PERMISSION_MODE_KEYS);
 const HookEventKeySchema = v.picklist(HOOK_EVENT_KEYS);
+const SkillKeySchema = v.picklist(SKILL_KEYS);
+const SubagentTypeKeySchema = v.picklist(SUBAGENT_TYPE_KEYS);
 
 export type ToolKey = (typeof TOOL_KEYS)[number];
 export type StopReasonKey = (typeof STOP_REASON_KEYS)[number];
 export type PermissionModeKey = (typeof PERMISSION_MODE_KEYS)[number];
 export type HookEventKey = (typeof HOOK_EVENT_KEYS)[number];
+export type SkillKey = (typeof SKILL_KEYS)[number];
+export type SubagentTypeKey = (typeof SUBAGENT_TYPE_KEYS)[number];
 
 const ShareValueSchema = v.pipe(v.number(), v.minValue(0), v.maxValue(1));
 
@@ -157,6 +224,13 @@ const PermissionModeBreakdownSchema = v.record(
   ShareValueSchema
 );
 
+const SkillBreakdownSchema = v.record(SkillKeySchema, ShareValueSchema);
+
+const SubagentTypeBreakdownSchema = v.record(
+  SubagentTypeKeySchema,
+  ShareValueSchema
+);
+
 const HourHistogramSchema = v.pipe(
   v.array(v.pipe(v.number(), v.integer(), v.minValue(0), v.maxValue(1_000_000))),
   v.length(24, "hourHistogramLocal must have exactly 24 entries")
@@ -169,7 +243,6 @@ const CountSchema = v.pipe(
   v.maxValue(10_000_000)
 );
 
-// Line churn can dwarf message counts on heavy days (huge generated files).
 const LineCountSchema = v.pipe(
   v.number(),
   v.integer(),
@@ -177,7 +250,6 @@ const LineCountSchema = v.pipe(
   v.maxValue(MAX_LINES_PER_DAY)
 );
 
-// Minutes per day is bounded at 24h. Allow a small buffer for clock skew.
 const MinutesPerDaySchema = v.pipe(
   v.number(),
   v.integer(),
@@ -185,7 +257,6 @@ const MinutesPerDaySchema = v.pipe(
   v.maxValue(1440)
 );
 
-// Latency clamped at 1h (3.6e6 ms) in the scanner; schema enforces.
 const LatencyMsSchema = v.pipe(
   v.number(),
   v.integer(),
@@ -193,7 +264,6 @@ const LatencyMsSchema = v.pipe(
   v.maxValue(3_600_000)
 );
 
-// Distinct-thing counts: projects, branches, MCP servers. 1e4 is plenty.
 const DistinctCountSchema = v.pipe(
   v.number(),
   v.integer(),
@@ -248,16 +318,22 @@ const DailyAggregateSchema = v.strictObject({
   gitBranchesActive: DistinctCountSchema,
   mcpServersUsed: DistinctCountSchema,
   sidechainMessages: CountSchema,
+  skillsUsed: DistinctCountSchema,
+  subagentTypesUsed: DistinctCountSchema,
+  worktreeEvents: CountSchema,
+  fileHistorySnapshots: CountSchema,
   modelBreakdown: ModelBreakdownSchema,
   toolUseBreakdown: ToolUseBreakdownSchema,
   stopReasonBreakdown: StopReasonBreakdownSchema,
   permissionModeBreakdown: PermissionModeBreakdownSchema,
   hookEventCounts: HookEventCountsSchema,
+  skillBreakdown: SkillBreakdownSchema,
+  subagentTypeBreakdown: SubagentTypeBreakdownSchema,
   hourHistogramLocal: HourHistogramSchema,
 }); // strictObject rejects unknown per-day keys (leaked file paths, etc.)
 
 export const UploadPayloadSchema = v.strictObject({
-  schemaVersion: v.literal(3),
+  schemaVersion: v.literal(4),
   source: v.literal("claude_code"),
   cliVersion: v.pipe(
     v.string(),
@@ -279,7 +355,7 @@ export function buildUploadPayload(args: {
   daily: DailyAggregate[];
 }): UploadPayload {
   const payload = {
-    schemaVersion: 3 as const,
+    schemaVersion: 4 as const,
     source: args.source,
     cliVersion: args.cliVersion,
     scannedAt: new Date().toISOString(),
@@ -305,11 +381,17 @@ export function buildUploadPayload(args: {
       gitBranchesActive: d.gitBranchesActive,
       mcpServersUsed: d.mcpServersUsed,
       sidechainMessages: d.sidechainMessages,
+      skillsUsed: d.skillsUsed,
+      subagentTypesUsed: d.subagentTypesUsed,
+      worktreeEvents: d.worktreeEvents,
+      fileHistorySnapshots: d.fileHistorySnapshots,
       modelBreakdown: { ...d.modelBreakdown },
       toolUseBreakdown: { ...d.toolUseBreakdown },
       stopReasonBreakdown: { ...d.stopReasonBreakdown },
       permissionModeBreakdown: { ...d.permissionModeBreakdown },
       hookEventCounts: { ...d.hookEventCounts },
+      skillBreakdown: { ...d.skillBreakdown },
+      subagentTypeBreakdown: { ...d.subagentTypeBreakdown },
       hourHistogramLocal: d.hourHistogramLocal.slice(),
     })),
   };

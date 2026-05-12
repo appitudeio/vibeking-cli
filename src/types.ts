@@ -25,11 +25,17 @@ export type DailyAggregate = {
   gitBranchesActive: number;
   mcpServersUsed: number;
   sidechainMessages: number;
+  skillsUsed: number;
+  subagentTypesUsed: number;
+  worktreeEvents: number;
+  fileHistorySnapshots: number;
   modelBreakdown: Record<string, number>;
   toolUseBreakdown: Record<string, number>;
   stopReasonBreakdown: Record<string, number>;
   permissionModeBreakdown: Record<string, number>;
   hookEventCounts: Record<string, number>;
+  skillBreakdown: Record<string, number>;
+  subagentTypeBreakdown: Record<string, number>;
   hourHistogramLocal: number[];
 };
 

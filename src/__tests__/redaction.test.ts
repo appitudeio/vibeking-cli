@@ -9,7 +9,7 @@ import {
 const emptyHistogram = new Array<number>(24).fill(0);
 
 const validInput: UploadPayload = {
-  schemaVersion: 3,
+  schemaVersion: 4,
   source: "claude_code",
   cliVersion: "0.0.1",
   scannedAt: "2026-05-10T12:00:00.000Z",
@@ -36,11 +36,17 @@ const validInput: UploadPayload = {
       gitBranchesActive: 3,
       mcpServersUsed: 1,
       sidechainMessages: 2,
+      skillsUsed: 3,
+      subagentTypesUsed: 2,
+      worktreeEvents: 5,
+      fileHistorySnapshots: 12,
       modelBreakdown: { "claude-opus-4-7": 1 },
       toolUseBreakdown: { Bash: 0.5, Read: 0.5 },
       stopReasonBreakdown: { end_turn: 0.5, tool_use: 0.5 },
       permissionModeBreakdown: { default: 0.7, plan: 0.3 },
       hookEventCounts: { SessionStart: 2, PreToolUse: 5, PostToolUse: 5 },
+      skillBreakdown: { "db-query": 0.6, other: 0.4 },
+      subagentTypeBreakdown: { "general-purpose": 0.8, other: 0.2 },
       hourHistogramLocal: emptyHistogram,
     },
   ],
@@ -75,11 +81,17 @@ describe("buildUploadPayload", () => {
           gitBranchesActive: 3,
           mcpServersUsed: 1,
           sidechainMessages: 2,
+          skillsUsed: 3,
+          subagentTypesUsed: 2,
+          worktreeEvents: 5,
+          fileHistorySnapshots: 12,
           modelBreakdown: { "claude-opus-4-7": 1 },
           toolUseBreakdown: { Bash: 0.5, Read: 0.5 },
           stopReasonBreakdown: { end_turn: 0.5, tool_use: 0.5 },
           permissionModeBreakdown: { default: 1 },
           hookEventCounts: { SessionStart: 1 },
+          skillBreakdown: { "db-query": 1 },
+          subagentTypeBreakdown: { "general-purpose": 1 },
           hourHistogramLocal: emptyHistogram,
         },
       ],
@@ -97,6 +109,7 @@ describe("buildUploadPayload", () => {
       "cacheReadTokens",
       "cacheWriteTokens",
       "date",
+      "fileHistorySnapshots",
       "filesTouched",
       "gitBranchesActive",
       "hookErrors",
@@ -115,21 +128,26 @@ describe("buildUploadPayload", () => {
       "responseLatencyMsP95",
       "sessions",
       "sidechainMessages",
+      "skillBreakdown",
+      "skillsUsed",
       "stopReasonBreakdown",
+      "subagentTypeBreakdown",
+      "subagentTypesUsed",
       "toolCalls",
       "toolErrors",
       "toolUseBreakdown",
       "totalActiveMinutes",
+      "worktreeEvents",
     ]);
   });
 
-  it("emits schemaVersion 3", () => {
+  it("emits schemaVersion 4", () => {
     const payload = buildUploadPayload({
       source: "claude_code",
       cliVersion: "0.0.1",
       daily: [],
     });
-    expect(payload.schemaVersion).toBe(3);
+    expect(payload.schemaVersion).toBe(4);
   });
 });
 
@@ -329,18 +347,26 @@ describe("UploadPayloadSchema", () => {
     expect(negErrors.success).toBe(false);
   });
 
-  it("rejects schemaVersion: 2 (old wire format)", () => {
+  it("rejects schemaVersion: 3 (previous wire format)", () => {
     const res = v.safeParse(UploadPayloadSchema, {
       ...validInput,
-      schemaVersion: 2 as unknown as 3,
+      schemaVersion: 3 as unknown as 4,
     });
     expect(res.success).toBe(false);
   });
 
-  it("rejects schemaVersion: 1 (older wire format)", () => {
+  it("rejects schemaVersion: 2 (older wire format)", () => {
     const res = v.safeParse(UploadPayloadSchema, {
       ...validInput,
-      schemaVersion: 1 as unknown as 3,
+      schemaVersion: 2 as unknown as 4,
+    });
+    expect(res.success).toBe(false);
+  });
+
+  it("rejects schemaVersion: 1 (oldest wire format)", () => {
+    const res = v.safeParse(UploadPayloadSchema, {
+      ...validInput,
+      schemaVersion: 1 as unknown as 4,
     });
     expect(res.success).toBe(false);
   });
@@ -445,5 +471,86 @@ describe("UploadPayloadSchema", () => {
       daily: [{ ...validInput.daily[0]!, responseLatencyMsP50: 3_600_001 }],
     });
     expect(res.success).toBe(false);
+  });
+
+  it("rejects user-specific skill names in skillBreakdown (must be allowlisted or 'other')", () => {
+    const res = v.safeParse(UploadPayloadSchema, {
+      ...validInput,
+      daily: [
+        {
+          ...validInput.daily[0]!,
+          // brain:* / gsd-* / omni-* are user-installed; scanner buckets to "other".
+          // Leaking the raw name would identify which marketplaces / private plugins
+          // the user has installed.
+          skillBreakdown: { "brain:plan-update": 1 },
+        },
+      ],
+    });
+    expect(res.success).toBe(false);
+  });
+
+  it("accepts allowlisted public-marketplace skill names + 'other'", () => {
+    const res = v.safeParse(UploadPayloadSchema, {
+      ...validInput,
+      daily: [
+        {
+          ...validInput.daily[0]!,
+          skillBreakdown: {
+            "db-query": 0.4,
+            "superpowers:brainstorming": 0.3,
+            "frontend-design:frontend-design": 0.2,
+            other: 0.1,
+          },
+        },
+      ],
+    });
+    expect(res.success).toBe(true);
+  });
+
+  it("rejects user-specific subagent_type names in subagentTypeBreakdown", () => {
+    const res = v.safeParse(UploadPayloadSchema, {
+      ...validInput,
+      daily: [
+        {
+          ...validInput.daily[0]!,
+          subagentTypeBreakdown: { "gsd-executor": 1 },
+        },
+      ],
+    });
+    expect(res.success).toBe(false);
+  });
+
+  it("accepts built-in + allowlisted subagent_type names + 'other'", () => {
+    const res = v.safeParse(UploadPayloadSchema, {
+      ...validInput,
+      daily: [
+        {
+          ...validInput.daily[0]!,
+          subagentTypeBreakdown: {
+            "general-purpose": 0.5,
+            Explore: 0.2,
+            Plan: 0.1,
+            "superpowers:code-reviewer": 0.1,
+            other: 0.1,
+          },
+        },
+      ],
+    });
+    expect(res.success).toBe(true);
+  });
+
+  it("rejects negative counts for tier 1.6 fields", () => {
+    for (const field of [
+      "skillsUsed",
+      "subagentTypesUsed",
+      "worktreeEvents",
+      "fileHistorySnapshots",
+    ] as const) {
+      const res = v.safeParse(UploadPayloadSchema, {
+        ...validInput,
+        daily: [{ ...validInput.daily[0]!, [field]: -1 }],
+      });
+      expect(res.success, `expected -1 ${field} to be rejected`).toBe(false);
+    }
   });
 });

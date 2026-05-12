@@ -9,8 +9,8 @@ import { buildUploadPayload } from "../redaction.js";
 // this test fails loudly — independent of whatever is in ~/.claude/projects
 // on the dev machine.
 //
-// The package.json test script forces TZ=UTC so the local-hour histogram
-// is deterministic regardless of where the test runs.
+// vitest.setup.ts pins TZ=UTC so the local-hour histogram is deterministic
+// on every entry point.
 
 const FIXTURE_DIR = join(
   dirname(fileURLToPath(import.meta.url)),
@@ -38,7 +38,7 @@ describe("upload payload snapshot (fixture → wire format)", () => {
     });
 
     expect(payload).toEqual({
-      schemaVersion: 3,
+      schemaVersion: 4,
       source: "claude_code",
       cliVersion: "0.0.0-test",
       scannedAt: "2026-01-20T12:00:00.000Z",
@@ -65,6 +65,10 @@ describe("upload payload snapshot (fixture → wire format)", () => {
           gitBranchesActive: 2,
           mcpServersUsed: 0,
           sidechainMessages: 1,
+          skillsUsed: 0,
+          subagentTypesUsed: 0,
+          worktreeEvents: 0,
+          fileHistorySnapshots: 0,
           modelBreakdown: {
             "claude-opus-4-7": 0.5,
             "claude-sonnet-4-6": 0.25,
@@ -87,6 +91,8 @@ describe("upload payload snapshot (fixture → wire format)", () => {
             PreToolUse: 1,
             PostToolUse: 1,
           },
+          skillBreakdown: {},
+          subagentTypeBreakdown: {},
           hourHistogramLocal: [
             0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0,
             0, 0,
@@ -100,7 +106,7 @@ describe("upload payload snapshot (fixture → wire format)", () => {
           cacheWriteTokens: 112,
           sessions: 2,
           assistantMessages: 3,
-          toolCalls: 3,
+          toolCalls: 7,
           toolErrors: 0,
           totalActiveMinutes: 30,
           longestSessionMinutes: 30,
@@ -114,14 +120,20 @@ describe("upload payload snapshot (fixture → wire format)", () => {
           gitBranchesActive: 1,
           mcpServersUsed: 1,
           sidechainMessages: 0,
+          skillsUsed: 2,
+          subagentTypesUsed: 2,
+          worktreeEvents: 1,
+          fileHistorySnapshots: 1,
           modelBreakdown: {
             "claude-opus-4-7": 0.3333,
             "claude-sonnet-4-6": 0.6667,
           },
           toolUseBreakdown: {
-            Edit: 0.3333,
-            Bash: 0.3333,
-            mcp: 0.3333,
+            Edit: 0.1429,
+            Bash: 0.1429,
+            mcp: 0.1429,
+            Skill: 0.2857,
+            Task: 0.2857,
           },
           stopReasonBreakdown: {
             tool_use: 0.3333,
@@ -133,6 +145,14 @@ describe("upload payload snapshot (fixture → wire format)", () => {
           },
           hookEventCounts: {
             SessionStart: 1,
+          },
+          skillBreakdown: {
+            "db-query": 0.5,
+            other: 0.5,
+          },
+          subagentTypeBreakdown: {
+            "general-purpose": 0.5,
+            other: 0.5,
           },
           hourHistogramLocal: [
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0,

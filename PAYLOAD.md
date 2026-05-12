@@ -6,7 +6,7 @@ The exact shape of what `vibeking publish` POSTs to the API. Defined in [`src/re
 
 ```ts
 {
-  schemaVersion: 3,                 // bumped on breaking shape changes
+  schemaVersion: 4,                 // bumped on breaking shape changes
   source: "claude_code",            // only source supported today
   cliVersion: string,               // semver-ish, e.g. "0.0.1"
   scannedAt: string,                // ISO 8601 datetime
@@ -39,11 +39,17 @@ The exact shape of what `vibeking publish` POSTs to the API. Defined in [`src/re
   gitBranchesActive: number,        // >= 0, integer, max 10_000 — distinct gitBranch strings; strings discarded
   mcpServersUsed: number,           // >= 0, integer, max 10_000 — distinct MCP server prefixes; server names discarded
   sidechainMessages: number,        // >= 0, integer — assistant turns where isSidechain was true
+  skillsUsed: number,               // >= 0, integer, max 10_000 — distinct input.skill values across Skill tool calls; names discarded after counting
+  subagentTypesUsed: number,        // >= 0, integer, max 10_000 — distinct input.subagent_type values across Task tool calls; names discarded
+  worktreeEvents: number,           // >= 0, integer — count of type:"worktree-state" records (cmux/worktree power-user signal)
+  fileHistorySnapshots: number,     // >= 0, integer — count of type:"file-history-snapshot" records
   modelBreakdown: Record<string, number>,                  // model name → fraction of assistant turns; max 32 keys
   toolUseBreakdown: Record<ToolKey, number>,               // tool name → fraction of toolCalls
   stopReasonBreakdown: Record<StopReason, number>,         // stop_reason → fraction of assistant turns
   permissionModeBreakdown: Record<PermissionMode, number>, // permission mode → fraction of mode-change events
   hookEventCounts: Record<HookEvent, number>,              // hook event name → count of attachments fired
+  skillBreakdown: Record<SkillKey, number>,                // skill name → fraction of Skill invocations; user-specific names collapse to `other`
+  subagentTypeBreakdown: Record<SubagentTypeKey, number>,  // subagent_type → fraction of Task invocations; user-specific names collapse to `other`
   hourHistogramLocal: number[]      // length 24; assistant turns by local hour-of-day (machine TZ at scan time)
 }
 ```
@@ -55,6 +61,10 @@ The exact shape of what `vibeking publish` POSTs to the API. Defined in [`src/re
 `PermissionMode` is a closed allowlist: `default`, `acceptEdits`, `plan`, `bypassPermissions`, `auto`, `bubble`, plus `other` for forward-compat with new modes.
 
 `HookEvent` is a closed allowlist of Claude Code hook event names: `SessionStart`, `UserPromptSubmit`, `PreToolUse`, `PostToolUse`, `Stop`, `SubagentStop`, `Notification`, `SessionEnd`, `PreCompact`, plus `other` for forward-compat.
+
+`SkillKey` is a closed allowlist of skill names from **public** Claude Code marketplaces (`superpowers:*`, `frontend-design:*`, `playwright-cli`, `firecrawl-*`, `slidev-*`, `db-query`, `obsidian`, `gdpr-compliance`, `paperclip*`, `para-memory-files`, `plaud-sync`, …), plus `other` for user-specific / unpublished skill names which the scanner buckets without leaving the machine. Marketplace skill names are already public on GitHub; user-installed plugin names (`brain:*`, `gsd-*`, internal codenames) collapse to `other`.
+
+`SubagentTypeKey` is a closed allowlist of built-in Claude Code subagents (`general-purpose`, `Explore`, `Plan`, `claude-code-guide`, `statusline-setup`) plus public marketplace agents (`superpowers:code-reviewer`, `code-review-ai:architect-review`, `cloud-infrastructure:cloud-architect`, `backend-development:backend-architect`, `security-scanning:security-auditor`, `unit-testing:test-automator`, `vercel:*`, …), plus `other` for user-defined subagent types.
 
 ## NOT included
 

@@ -10,10 +10,14 @@ import {
   NAMED_STOP_REASONS,
   NAMED_PERMISSION_MODES,
   NAMED_HOOK_EVENTS,
+  NAMED_SKILLS,
+  NAMED_SUBAGENT_TYPES,
   type ToolKey,
   type StopReasonKey,
   type PermissionModeKey,
   type HookEventKey,
+  type SkillKey,
+  type SubagentTypeKey,
 } from "./redaction.js";
 import type { DailyAggregate, ScanSummary } from "./types.js";
 
@@ -45,6 +49,8 @@ const KNOWN_TOOLS = new Set<string>(NAMED_TOOLS);
 const KNOWN_STOP_REASONS = new Set<string>(NAMED_STOP_REASONS);
 const KNOWN_PERMISSION_MODES = new Set<string>(NAMED_PERMISSION_MODES);
 const KNOWN_HOOK_EVENTS = new Set<string>(NAMED_HOOK_EVENTS);
+const KNOWN_SKILLS = new Set<string>(NAMED_SKILLS);
+const KNOWN_SUBAGENT_TYPES = new Set<string>(NAMED_SUBAGENT_TYPES);
 
 // Tools whose input.file_path is a real local file path. Used for
 // filesTouched (count only) — the strings stay in scanner memory inside
@@ -115,6 +121,16 @@ type AttachmentRecord = RecordWithSourceContext & {
   };
 };
 
+// worktree-state records have no fields we read (we only count occurrences),
+// so we don't bother with a typed alias for them.
+
+type FileHistorySnapshotRecord = {
+  type: "file-history-snapshot";
+  snapshot?: {
+    timestamp?: string;
+  };
+};
+
 export function scanClaudeCode(): Promise<ScanSummary> {
   return scanClaudeCodeDir(CLAUDE_PROJECTS_DIR);
 }
@@ -172,6 +188,8 @@ type MutableDay = {
   stopReasons: Map<StopReasonKey, number>;
   permissionModes: Map<PermissionModeKey, number>;
   hookEvents: Map<HookEventKey, number>;
+  skills: Map<SkillKey, number>;
+  subagentTypes: Map<SubagentTypeKey, number>;
   hourHistogramLocal: number[];
   // Strings live here for the scan duration, but only .size is read into
   // the DailyAggregate that `finalizeDay` returns. MutableDay is module-
@@ -180,11 +198,15 @@ type MutableDay = {
   cwds: Set<string>;
   gitBranches: Set<string>;
   mcpServers: Set<string>;
+  skillsSeen: Set<string>;
+  subagentTypesSeen: Set<string>;
   linesAdded: number;
   linesRemoved: number;
   toolErrors: number;
   hookErrors: number;
   sidechainMessages: number;
+  worktreeEvents: number;
+  fileHistorySnapshots: number;
   latenciesMs: number[];
   // Cached so we don't allocate a Date object per assistant record just to
   // read getTimezoneOffset(). DST transitions never happen mid-day in 99%
@@ -205,16 +227,22 @@ function makeDay(date: string): MutableDay {
     stopReasons: new Map<StopReasonKey, number>(),
     permissionModes: new Map<PermissionModeKey, number>(),
     hookEvents: new Map<HookEventKey, number>(),
+    skills: new Map<SkillKey, number>(),
+    subagentTypes: new Map<SubagentTypeKey, number>(),
     hourHistogramLocal: new Array<number>(24).fill(0),
     touchedPaths: new Set<string>(),
     cwds: new Set<string>(),
     gitBranches: new Set<string>(),
     mcpServers: new Set<string>(),
+    skillsSeen: new Set<string>(),
+    subagentTypesSeen: new Set<string>(),
     linesAdded: 0,
     linesRemoved: 0,
     toolErrors: 0,
     hookErrors: 0,
     sidechainMessages: 0,
+    worktreeEvents: 0,
+    fileHistorySnapshots: 0,
     latenciesMs: [],
     tzOffsetMs: null,
   };
@@ -263,11 +291,17 @@ function finalizeDay(d: MutableDay): DailyAggregate {
     gitBranchesActive: d.gitBranches.size,
     mcpServersUsed: d.mcpServers.size,
     sidechainMessages: d.sidechainMessages,
+    skillsUsed: d.skillsSeen.size,
+    subagentTypesUsed: d.subagentTypesSeen.size,
+    worktreeEvents: d.worktreeEvents,
+    fileHistorySnapshots: d.fileHistorySnapshots,
     modelBreakdown: shareMap(d.models, assistantMessages),
     toolUseBreakdown: shareMap(d.tools, toolCalls),
     stopReasonBreakdown: shareMap(d.stopReasons, assistantMessages),
     permissionModeBreakdown: shareMap(d.permissionModes, permissionModeChanges),
     hookEventCounts: Object.fromEntries(d.hookEvents),
+    skillBreakdown: shareMap(d.skills, sumMap(d.skills)),
+    subagentTypeBreakdown: shareMap(d.subagentTypes, sumMap(d.subagentTypes)),
     hourHistogramLocal: d.hourHistogramLocal.slice(),
   };
 }
@@ -361,6 +395,20 @@ async function parseFile(
       } else if (type === "attachment") {
         const dateInfo = ingestAttachment(rec as AttachmentRecord, byDate);
         if (dateInfo) lastDate = dateInfo.date;
+      } else if (type === "worktree-state") {
+        // No timestamp on these records — attribute via cursor (same as
+        // permission-mode). Records before any dated record in the file
+        // are dropped.
+        if (!lastDate) continue;
+        byDate.get(lastDate)!.worktreeEvents += 1;
+      } else if (type === "file-history-snapshot") {
+        // Timestamp lives at snapshot.timestamp (nested ISO).
+        const fhs = rec as FileHistorySnapshotRecord;
+        const info = dayFor(fhs.snapshot?.timestamp, byDate);
+        if (info) {
+          info.day.fileHistorySnapshots += 1;
+          lastDate = info.date;
+        }
       }
     }
   } finally {
@@ -506,6 +554,21 @@ function ingestToolUseInput(
         addLineDelta(day, obj.old_string, obj.new_string);
       }
     }
+  } else if (toolName === "Skill" && typeof input.skill === "string" && input.skill) {
+    // input.args carries user-intent text and is NEVER read.
+    day.skillsSeen.add(input.skill);
+    incrementMap(day.skills, normalizeSkillName(input.skill));
+  } else if (
+    // Claude Code 1.x dispatched subagents via "Task"; 2.x renamed it to
+    // "Agent". Real data shows the user's recent sessions use "Agent" almost
+    // exclusively. Both tools carry input.subagent_type identically.
+    (toolName === "Task" || toolName === "Agent") &&
+    typeof input.subagent_type === "string" &&
+    input.subagent_type
+  ) {
+    // input.prompt and input.description carry user content; NEVER read.
+    day.subagentTypesSeen.add(input.subagent_type);
+    incrementMap(day.subagentTypes, normalizeSubagentType(input.subagent_type));
   }
 }
 
@@ -628,6 +691,24 @@ function isKnownHookEvent(s: string): s is Exclude<HookEventKey, "other"> {
 function normalizeHookEvent(raw: string | undefined): HookEventKey | null {
   if (!raw) return null;
   return isKnownHookEvent(raw) ? raw : "other";
+}
+
+function isKnownSkill(s: string): s is Exclude<SkillKey, "other"> {
+  return KNOWN_SKILLS.has(s);
+}
+
+function normalizeSkillName(raw: string): SkillKey {
+  return isKnownSkill(raw) ? raw : "other";
+}
+
+function isKnownSubagentType(
+  s: string
+): s is Exclude<SubagentTypeKey, "other"> {
+  return KNOWN_SUBAGENT_TYPES.has(s);
+}
+
+function normalizeSubagentType(raw: string): SubagentTypeKey {
+  return isKnownSubagentType(raw) ? raw : "other";
 }
 
 async function collectJsonlFiles(root: string): Promise<string[]> {
