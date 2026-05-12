@@ -27,7 +27,16 @@ import type { DailyAggregate, SourceType } from "./types.js";
 /** Hand-curated supplement for popular public skills the auto-sync misses.
  * Keep this list short and justify each entry inline — anyone reading the
  * trust gate should be able to verify the GitHub repo exists and is
- * public. */
+ * public.
+ *
+ * CROSS-REPO CONTRACT: this array MUST stay byte-identical with the same
+ * constant in the private server repo at
+ *   vibeking/packages/core/src/redaction.ts (`CURATED_PUBLIC_INVOCATIONS`).
+ * If they diverge, the CLI may emit a payload its own redaction accepts
+ * that the server's schema then rejects (or vice versa). When changing
+ * either side, update both in the same PR / cross-repo commit. The same
+ * applies to `BUILTIN_SUBAGENT_TYPES`, `MAX_LINES_PER_DAY`, all `NAMED_*`
+ * allowlists, and `MAX_TOKENS_PER_FIELD`. */
 const CURATED_PUBLIC_INVOCATIONS = [
   // db-query: popular DB query helper. Real public plugin; not yet
   // indexed at claudemarketplaces.com.
