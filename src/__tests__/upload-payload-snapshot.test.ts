@@ -30,10 +30,11 @@ describe("upload payload snapshot (fixture → wire format)", () => {
     vi.useRealTimers();
   });
 
-  it("produces a stable v5 payload from the synthetic fixture", async () => {
+  it("produces a stable v6 payload from the synthetic fixture", async () => {
     const summary = await scanClaudeCodeDir(FIXTURE_DIR);
     const payload = buildUploadPayload({
       cliVersion: "0.0.0-test",
+      installationId: "inst_snapshot_test",
       daily: summary.daily,
     });
 
@@ -43,7 +44,8 @@ describe("upload payload snapshot (fixture → wire format)", () => {
 
     // Structural invariants — fast to read in CI failures without diffing
     // the .snap blob.
-    expect(payload.schemaVersion).toBe(5);
+    expect(payload.schemaVersion).toBe(6);
+    expect(payload.installationId).toBe("inst_snapshot_test");
     expect(payload.cliVersion).toBe("0.0.0-test");
     expect(payload.scannedAt).toBe("2026-01-20T12:00:00.000Z");
     expect(payload.daily.map((d) => d.date)).toEqual([
@@ -71,6 +73,7 @@ describe("upload payload snapshot (fixture → wire format)", () => {
     const summary = await scanClaudeCodeDir(FIXTURE_DIR);
     const payload = buildUploadPayload({
       cliVersion: "0.0.0-test",
+      installationId: "inst_canary_test",
       daily: summary.daily,
     });
     const json = JSON.stringify(payload);

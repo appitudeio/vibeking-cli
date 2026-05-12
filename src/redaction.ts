@@ -116,11 +116,19 @@ export function isIsoDate(s: string): boolean {
 }
 
 // ────────────────────────────────────────────────────────────
-// UploadPayloadSchema (wire format v5) — single source of truth for what
+// UploadPayloadSchema (wire format v6) — single source of truth for what
 // the CLI is allowed to send. Both the CLI (commands/inspectUpload +
 // publish) and the server's scan route parse against this exact schema.
 //
-// v5 introduces per-(tool, model) shards inside each day. The CLI ships
+// v6 adds the required top-level `installationId` — a stable
+// server-issued identity for this CLI install. The CLI registers via
+// POST /v1/installations/register on first run and caches the returned
+// id in ~/.vibeking/config.json. Multi-device users (home + office)
+// have one installationId per machine; the server SUMs shards across
+// installations at read time so working from two boxes adds rather
+// than collapsing to MAX.
+//
+// v5 introduced per-(tool, model) shards inside each day. The CLI ships
 // today only with a Claude Code scanner; the other tools in
 // SUPPORTED_TOOLS are accepted by the wire format so their scanners can
 // plug in without a schema bump when shipped.
@@ -432,11 +440,20 @@ const DailyAggregateSchema = v.pipe(
 
 export const UploadPayloadSchema = v.pipe(
   v.strictObject({
-    schemaVersion: v.literal(5),
+    schemaVersion: v.literal(6),
     cliVersion: v.pipe(
       v.string(),
       v.regex(CLI_VERSION_REGEX, "cliVersion must be semver-ish")
     ),
+    /**
+     * Server-issued stable identity for this CLI install. Required as of
+     * v6 — the CLI calls POST /v1/installations/register on first run
+     * and caches the returned id. The server rejects payloads with an
+     * unknown id (`installation_unknown`) or revoked id
+     * (`installation_revoked`); a missing id specifically maps to
+     * `installation_required` so the CLI knows to register + retry.
+     */
+    installationId: v.pipe(v.string(), v.minLength(1), v.maxLength(64)),
     scannedAt: v.pipe(v.string(), v.isoTimestamp()),
     daily: v.pipe(
       v.array(DailyAggregateSchema),
@@ -465,11 +482,13 @@ export type WireDailyShard = v.InferOutput<typeof DailyShardSchema>;
  */
 export function buildUploadPayload(args: {
   cliVersion: string;
+  installationId: string;
   daily: DailyAggregate[];
 }): UploadPayload {
   const payload = {
-    schemaVersion: 5 as const,
+    schemaVersion: 6 as const,
     cliVersion: args.cliVersion,
+    installationId: args.installationId,
     scannedAt: new Date().toISOString(),
     daily: args.daily.map((d) => ({
       date: d.date,

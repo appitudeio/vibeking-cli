@@ -1,6 +1,6 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
-exports[`upload payload snapshot (fixture → wire format) > produces a stable v5 payload from the synthetic fixture 1`] = `
+exports[`upload payload snapshot (fixture → wire format) > produces a stable v6 payload from the synthetic fixture 1`] = `
 {
   "cliVersion": "0.0.0-test",
   "daily": [
@@ -215,7 +215,8 @@ exports[`upload payload snapshot (fixture → wire format) > produces a stable v
       "worktreeEvents": 1,
     },
   ],
+  "installationId": "inst_snapshot_test",
   "scannedAt": "2026-01-20T12:00:00.000Z",
-  "schemaVersion": 5,
+  "schemaVersion": 6,
 }
 `;

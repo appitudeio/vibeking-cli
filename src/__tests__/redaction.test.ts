@@ -43,8 +43,9 @@ const ccShard: CCShard = {
 };
 
 const validInput: UploadPayload = {
-  schemaVersion: 5,
-  cliVersion: "0.0.2",
+  schemaVersion: 6,
+  cliVersion: "0.0.3",
+  installationId: "inst_test_fixture_0001",
   scannedAt: "2026-05-10T12:00:00.000Z",
   daily: [
     {
@@ -120,13 +121,15 @@ function makeLocalDay(): DailyAggregate {
 describe("buildUploadPayload", () => {
   it("only includes allowlisted top-level + per-day keys", () => {
     const payload = buildUploadPayload({
-      cliVersion: "0.0.2",
+      cliVersion: "0.0.3",
+      installationId: "inst_test_001",
       daily: [makeLocalDay()],
     });
 
     expect(Object.keys(payload).sort()).toEqual([
       "cliVersion",
       "daily",
+      "installationId",
       "scannedAt",
       "schemaVersion",
     ]);
@@ -161,12 +164,22 @@ describe("buildUploadPayload", () => {
     ]);
   });
 
-  it("emits schemaVersion 5", () => {
+  it("emits schemaVersion 6", () => {
     const payload = buildUploadPayload({
-      cliVersion: "0.0.2",
+      cliVersion: "0.0.3",
+      installationId: "inst_test_002",
       daily: [makeLocalDay()],
     });
-    expect(payload.schemaVersion).toBe(5);
+    expect(payload.schemaVersion).toBe(6);
+  });
+
+  it("emits the installationId verbatim", () => {
+    const payload = buildUploadPayload({
+      cliVersion: "0.0.3",
+      installationId: "inst_specific_id_xyz",
+      daily: [makeLocalDay()],
+    });
+    expect(payload.installationId).toBe("inst_specific_id_xyz");
   });
 });
 
@@ -455,11 +468,33 @@ describe("UploadPayloadSchema", () => {
     }
   });
 
-  it("rejects schemaVersion < 5 (previous wire formats)", () => {
-    for (const v of [1, 2, 3, 4]) {
+  it("rejects schemaVersion < 6 (previous wire formats)", () => {
+    for (const v of [1, 2, 3, 4, 5]) {
       const res = (vSafeParse(v, validInput) as unknown) as { success: boolean };
       expect(res.success, `expected schemaVersion ${v} to be rejected`).toBe(false);
     }
+  });
+
+  it("rejects payloads missing installationId", () => {
+    const { installationId: _omit, ...withoutInstallation } = validInput;
+    const res = v.safeParse(UploadPayloadSchema, withoutInstallation);
+    expect(res.success).toBe(false);
+  });
+
+  it("rejects installationId longer than 64 chars", () => {
+    const res = v.safeParse(UploadPayloadSchema, {
+      ...validInput,
+      installationId: "x".repeat(65),
+    });
+    expect(res.success).toBe(false);
+  });
+
+  it("rejects empty installationId", () => {
+    const res = v.safeParse(UploadPayloadSchema, {
+      ...validInput,
+      installationId: "",
+    });
+    expect(res.success).toBe(false);
   });
 
   it("rejects unknown permission modes", () => {
@@ -757,12 +792,12 @@ describe("UploadPayloadSchema", () => {
   });
 });
 
-/** Helper for the v < 5 schemaVersion rejection test — wraps safeParse so the
+/** Helper for the v < 6 schemaVersion rejection test — wraps safeParse so the
  *  loop body stays compact. */
 function vSafeParse(schemaVersion: number, validInput: UploadPayload) {
   return v.safeParse(UploadPayloadSchema, {
     ...validInput,
-    schemaVersion: schemaVersion as unknown as 5,
+    schemaVersion: schemaVersion as unknown as 6,
   });
 }
 

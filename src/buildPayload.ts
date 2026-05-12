@@ -12,11 +12,13 @@ import { CLI_VERSION } from "./version.js";
 
 export async function buildPayloadFromScanOrExit(opts: {
   heading: string;
+  installationId: string;
 }): Promise<UploadPayload | null> {
   try {
     const summary = await scanClaudeCode();
     return buildUploadPayload({
       cliVersion: CLI_VERSION,
+      installationId: opts.installationId,
       daily: summary.daily,
     });
   } catch (err) {

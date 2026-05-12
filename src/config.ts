@@ -20,6 +20,20 @@ export type CliConfig = {
    * by `vibeking logout` (logout = full consent reset).
    */
   autoPublish?: boolean;
+  /**
+   * Server-issued installation identity for this CLI install. Cached on
+   * first publish via POST /v1/installations/register. Same machine across
+   * logout/login keeps the same installationId because it's not auth state
+   * — but is tied to `installationHost` so a host switch (dev/prod flip)
+   * re-registers rather than leaking the id across servers.
+   */
+  installationId?: string;
+  /**
+   * Host the installationId was minted against. Mirrors `tokenHost`'s
+   * defense — refuse to send the id to a different apiUrl, and trigger
+   * fresh registration when the host changes.
+   */
+  installationHost?: string;
 };
 
 const CONFIG_PATH = join(homedir(), ".vibeking", "config.json");
@@ -44,6 +58,8 @@ type PersistedConfig = {
   userId?: string;
   handle?: string;
   autoPublish?: boolean;
+  installationId?: string;
+  installationHost?: string;
 };
 
 export async function readConfig(): Promise<CliConfig> {
@@ -65,6 +81,8 @@ export async function writeConfig(cfg: CliConfig): Promise<void> {
     userId: cfg.userId,
     handle: cfg.handle,
     autoPublish: cfg.autoPublish,
+    installationId: cfg.installationId,
+    installationHost: cfg.installationHost,
   };
   await writeFile(CONFIG_PATH, JSON.stringify(persisted, null, 2), {
     mode: 0o600,
@@ -78,6 +96,12 @@ export async function clearAuth(): Promise<void> {
   delete cfg.userId;
   delete cfg.handle;
   delete cfg.autoPublish;
+  // Installation identity is intentionally NOT cleared here — logout
+  // is auth state, the installation is machine identity that persists
+  // across logout/login on the same box. Clearing it on logout would
+  // mint a new installation on next publish, fragmenting the user's
+  // history. `vibeking logout --reset-installation` (separate flag)
+  // would be the right hook if a user genuinely wants a fresh id.
   await writeConfig(cfg);
 }
 

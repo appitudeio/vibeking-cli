@@ -1,5 +1,13 @@
 import pc from "picocolors";
 import { buildPayloadFromScanOrExit } from "../buildPayload.js";
+import { readConfig } from "../config.js";
+
+// Local-only command: shows what /v1/scan WOULD receive. If the user
+// has a cached installationId, surface it so the inspected payload
+// matches what a real publish would send. If not, use a placeholder
+// — the local view never hits the network, so the placeholder doesn't
+// trigger a registration.
+const INSTALLATION_ID_PLACEHOLDER = "inst_inspect_placeholder";
 
 export async function runInspectUpload(): Promise<void> {
   process.stdout.write(
@@ -10,8 +18,15 @@ export async function runInspectUpload(): Promise<void> {
     ].join("\n") + "\n"
   );
 
+  const cfg = await readConfig();
+  const installationId =
+    cfg.installationId && cfg.installationHost === cfg.apiUrl
+      ? cfg.installationId
+      : INSTALLATION_ID_PLACEHOLDER;
+
   const payload = await buildPayloadFromScanOrExit({
     heading: "payload would fail server-side validation",
+    installationId,
   });
   if (!payload) return;
 
