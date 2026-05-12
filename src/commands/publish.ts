@@ -25,19 +25,32 @@ const PublishResponseSchema = v.object({
   }),
 });
 
-// Error responses the server emits from the installation gate at
-// /v1/scan. Mirrors @vibeking/core's InstallationErrorCodeSchema; if
-// either side adds a new code, both sides must update or the CLI's
-// retry/stop logic falls through to a generic HTTP-error message.
+// Mirrors @vibeking/core's InstallationErrorCodeSchema. Single source for
+// the picklist + the exhaustive switch — if either side adds a new code,
+// add it to this const and TS will refuse to build until the runPublish
+// switch handles it (via the `never` assertion at the bottom).
+const INSTALLATION_ERROR_CODES = [
+  "installation_required",
+  "installation_unknown",
+  "installation_not_owned",
+  "installation_revoked",
+] as const;
+type InstallationErrorCode = (typeof INSTALLATION_ERROR_CODES)[number];
+
 const InstallationErrorResponseSchema = v.object({
   ok: v.literal(false),
-  error: v.picklist([
-    "installation_required",
-    "installation_unknown",
-    "installation_not_owned",
-    "installation_revoked",
-  ] as const),
+  error: v.picklist(INSTALLATION_ERROR_CODES),
   message: v.string(),
+});
+
+// Loose envelope used when the body has the right shape but the `error`
+// code isn't one the CLI knows. Surfaces the server's `message` rather
+// than burying it in a generic HTTP-error dump — happens if the server
+// adds a 5th code before the CLI catches up.
+const LooseErrorEnvelopeSchema = v.object({
+  ok: v.literal(false),
+  error: v.string(),
+  message: v.optional(v.string()),
 });
 
 type SubmitOutcome =
@@ -45,9 +58,10 @@ type SubmitOutcome =
   | { kind: "auth_rejected" }
   | {
       kind: "installation_error";
-      code: v.InferOutput<typeof InstallationErrorResponseSchema>["error"];
+      code: InstallationErrorCode;
       message: string;
     }
+  | { kind: "unknown_server_error"; code: string; message: string }
   | { kind: "other_http_error"; status: number; body: string };
 
 async function submitScan(
@@ -72,28 +86,45 @@ async function submitScan(
   if (isAuthRejection(res)) return { kind: "auth_rejected" };
 
   if (!res.ok) {
-    // Try parsing as an installation error first — those carry the
-    // typed error code the CLI's retry/stop logic keys off. Fall back to
-    // generic HTTP-error reporting if the body doesn't match.
     const rawBody = await res.text().catch(() => "<no body>");
+    // Step 1: JSON parse. If this fails the response isn't structured —
+    // misconfigured proxy, HTML 502 page, etc. Fall through to the
+    // generic HTTP-error dump.
+    let json: unknown;
     try {
-      const parsed = v.parse(
-        InstallationErrorResponseSchema,
-        JSON.parse(rawBody)
-      );
-      return {
-        kind: "installation_error",
-        code: parsed.error,
-        message: parsed.message,
-      };
+      json = JSON.parse(rawBody);
     } catch {
       return { kind: "other_http_error", status: res.status, body: rawBody };
     }
+    // Step 2: try the strict installation-error schema. Matches → known
+    // typed code, dispatch by `code` in runPublish.
+    const strict = v.safeParse(InstallationErrorResponseSchema, json);
+    if (strict.success) {
+      return {
+        kind: "installation_error",
+        code: strict.output.error,
+        message: strict.output.message,
+      };
+    }
+    // Step 3: structurally valid envelope but unknown code. Surface
+    // server message cleanly — don't bury in a 500-char raw-body dump.
+    const loose = v.safeParse(LooseErrorEnvelopeSchema, json);
+    if (loose.success) {
+      return {
+        kind: "unknown_server_error",
+        code: loose.output.error,
+        message: loose.output.message ?? "<no message>",
+      };
+    }
+    // Step 4: well-formed JSON but not even a `{ ok:false, error:string }`
+    // envelope. Generic HTTP error.
+    return { kind: "other_http_error", status: res.status, body: rawBody };
   }
 
   const body = v.parse(PublishResponseSchema, await res.json());
   return { kind: "ok", body };
 }
+
 
 export async function runPublish(): Promise<void> {
   let cfg = await requireAuthedConfig();
@@ -155,36 +186,57 @@ export async function runPublish(): Promise<void> {
   if (outcome.kind === "auth_rejected") return; // isAuthRejection already printed
 
   if (outcome.kind === "installation_error") {
-    if (outcome.code === "installation_revoked") {
-      // Hard stop. Do NOT auto-re-register — the user revoked this
-      // installation, so the right answer is "respect the revocation
-      // and tell the user how to recover," not "silently make a new id."
-      process.stdout.write(
-        `\n  ${pc.red("✕")} this installation was revoked.\n` +
-          `  ${pc.dim("visit")} ${pc.cyan(`${cfg.webUrl}/settings`)} ${pc.dim("to manage installations,")}\n` +
-          `  ${pc.dim("or run")} ${pc.bold("vibeking installations reset")} ${pc.dim("to register a fresh installation.")}\n\n`
-      );
-      process.exitCode = 1;
-      return;
+    switch (outcome.code) {
+      case "installation_required":
+      case "installation_unknown":
+        // The retry above already ran and either succeeded or fell
+        // through to here. If we're here, the retry didn't help.
+        process.stdout.write(`\n  ${pc.red("✕")} ${outcome.message}\n\n`);
+        process.exitCode = 1;
+        return;
+      case "installation_revoked":
+        // Hard stop. Do NOT auto-re-register — user revoked, respect it.
+        process.stdout.write(
+          `\n  ${pc.red("✕")} this installation was revoked.\n` +
+            `  ${pc.dim("visit")} ${pc.cyan(`${cfg.webUrl}/settings`)} ${pc.dim("to manage installations,")}\n` +
+            `  ${pc.dim("or run")} ${pc.bold("vibeking installations reset")} ${pc.dim("to register a fresh installation.")}\n\n`
+        );
+        process.exitCode = 1;
+        return;
+      case "installation_not_owned":
+        // Forensic signal — the locally-cached id belongs to a different
+        // user. Clear locally so a follow-up scan registers fresh, but
+        // stop THIS scan so the cross-tenant pattern is visible in the
+        // server's audit log.
+        cfg = await clearCachedInstallation(cfg);
+        process.stdout.write(
+          `\n  ${pc.red("✕")} this installation is registered to a different account.\n` +
+            `  ${pc.dim("if you copied a config from another machine, run")} ${pc.bold("vibeking publish")} ${pc.dim("again to register fresh.")}\n\n`
+        );
+        process.exitCode = 1;
+        return;
+      default: {
+        // Exhaustiveness check — if a new code is added to
+        // INSTALLATION_ERROR_CODES without a case here, TS narrows
+        // `outcome` to `never` because the case statements above
+        // exhausted all possible values of `outcome.code`. Without this
+        // const assignment the compiler doesn't surface that miss.
+        const _exhaustive: never = outcome;
+        throw new Error(
+          `unhandled installation error code: ${JSON.stringify(_exhaustive)}`
+        );
+      }
     }
-    if (outcome.code === "installation_not_owned") {
-      // Forensic signal — the locally-cached id belongs to a different
-      // user. Most likely: a user copied their ~/.vibeking config from
-      // another machine. Clear the local id so a follow-up scan
-      // registers fresh under the current account, but stop THIS scan
-      // so the cross-tenant pattern is visible in the audit log.
-      cfg = await clearCachedInstallation(cfg);
-      process.stdout.write(
-        `\n  ${pc.red("✕")} this installation is registered to a different account.\n` +
-          `  ${pc.dim("if you copied a config from another machine, run")} ${pc.bold("vibeking publish")} ${pc.dim("again to register fresh.")}\n\n`
-      );
-      process.exitCode = 1;
-      return;
-    }
-    // installation_required / installation_unknown reached the retry
-    // loop above — if we hit them again here, the retry didn't help.
+  }
+
+  if (outcome.kind === "unknown_server_error") {
+    // Server returned a typed envelope with a code the CLI doesn't know.
+    // Surface the message cleanly — likely means the server is ahead
+    // of this CLI version and the user needs to upgrade.
     process.stdout.write(
-      `\n  ${pc.red("✕")} ${outcome.message}\n\n`
+      `\n  ${pc.red("✕")} server returned unknown error code ${pc.bold(outcome.code)}.\n` +
+        `  ${pc.dim(outcome.message)}\n` +
+        `  ${pc.dim("upgrade the CLI:")} ${pc.bold("npm i -g vibeking@latest")}\n\n`
     );
     process.exitCode = 1;
     return;

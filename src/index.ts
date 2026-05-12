@@ -4,6 +4,10 @@ import { runInspectUpload } from "./commands/inspectUpload.js";
 import { runHelp } from "./commands/help.js";
 import { runLogin, runLogout, runWhoami } from "./commands/auth.js";
 import { runPublish } from "./commands/publish.js";
+import {
+  runInstallationsHelp,
+  runInstallationsReset,
+} from "./commands/installations.js";
 import type { Scope } from "./types.js";
 
 type Command =
@@ -14,7 +18,9 @@ type Command =
   | "login"
   | "logout"
   | "whoami"
-  | "publish";
+  | "publish"
+  | "installations:reset"
+  | "installations:help";
 
 type ParsedArgs = {
   command: Command;
@@ -28,6 +34,7 @@ function parseArgs(argv: string[]): ParsedArgs {
   let scope: Scope = "weekly";
 
   const first = args[0];
+  const second = args[1];
   if (first && !first.startsWith("-")) {
     if (first === "scan") command = "scan";
     else if (first === "inspect-upload" || first === "inspect") command = "inspect-upload";
@@ -36,7 +43,9 @@ function parseArgs(argv: string[]): ParsedArgs {
     else if (first === "logout") command = "logout";
     else if (first === "whoami") command = "whoami";
     else if (first === "publish") command = "publish";
-    else command = "default";
+    else if (first === "installations") {
+      command = second === "reset" ? "installations:reset" : "installations:help";
+    } else command = "default";
   } else if (args.includes("--help") || args.includes("-h")) {
     command = "help";
   }
@@ -75,6 +84,12 @@ async function main(): Promise<void> {
       return;
     case "publish":
       await runPublish();
+      return;
+    case "installations:reset":
+      await runInstallationsReset();
+      return;
+    case "installations:help":
+      runInstallationsHelp();
       return;
   }
 }

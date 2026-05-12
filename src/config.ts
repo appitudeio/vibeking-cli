@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join, dirname } from "node:path";
 import pc from "picocolors";
@@ -84,9 +84,23 @@ export async function writeConfig(cfg: CliConfig): Promise<void> {
     installationId: cfg.installationId,
     installationHost: cfg.installationHost,
   };
-  await writeFile(CONFIG_PATH, JSON.stringify(persisted, null, 2), {
+  // Atomic write: temp-file + rename. Two `vibeking publish` processes
+  // racing on the same config CAN still produce one orphan installation
+  // (each does its own register against the server), but the file itself
+  // never tears mid-write. The PID suffix on the temp filename keeps the
+  // two processes from clobbering each other's temp file.
+  const tmpPath = `${CONFIG_PATH}.tmp.${process.pid}`;
+  await writeFile(tmpPath, JSON.stringify(persisted, null, 2), {
     mode: 0o600,
   });
+  try {
+    await rename(tmpPath, CONFIG_PATH);
+  } catch (err) {
+    // Clean up the temp file if rename fails (rare — same-directory
+    // rename is atomic on POSIX, only fails on perms / disk-full).
+    await unlink(tmpPath).catch(() => {});
+    throw err;
+  }
 }
 
 export async function clearAuth(): Promise<void> {
@@ -100,8 +114,8 @@ export async function clearAuth(): Promise<void> {
   // is auth state, the installation is machine identity that persists
   // across logout/login on the same box. Clearing it on logout would
   // mint a new installation on next publish, fragmenting the user's
-  // history. `vibeking logout --reset-installation` (separate flag)
-  // would be the right hook if a user genuinely wants a fresh id.
+  // history. Use `vibeking installations reset` for the rare case
+  // where a user genuinely wants a fresh id.
   await writeConfig(cfg);
 }
 
