@@ -1,5 +1,12 @@
 import type { DailyAggregate } from "./types.js";
 
+/**
+ * Pick the model with the most token weight across the supplied days.
+ * Operates on the per-shard tokens that the v5 scanner produces — no
+ * `modelBreakdown` indirection because shards carry precise tokens per
+ * (tool, model). When a user runs multiple tools in a day, this picks
+ * the top model regardless of which tool ran it.
+ */
 export function pickTopModel(daily: DailyAggregate[]): {
   model: string | null;
   share: number;
@@ -7,9 +14,9 @@ export function pickTopModel(daily: DailyAggregate[]): {
   const totals = new Map<string, number>();
   let grand = 0;
   for (const d of daily) {
-    for (const [model, share] of Object.entries(d.modelBreakdown)) {
-      const weight = share * (d.inputTokens + d.outputTokens + d.cacheWriteTokens);
-      totals.set(model, (totals.get(model) ?? 0) + weight);
+    for (const s of d.shards) {
+      const weight = s.inputTokens + s.outputTokens + s.cacheWriteTokens;
+      totals.set(s.model, (totals.get(s.model) ?? 0) + weight);
       grand += weight;
     }
   }

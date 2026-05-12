@@ -16,7 +16,6 @@ export async function buildPayloadFromScanOrExit(opts: {
   try {
     const summary = await scanClaudeCode();
     return buildUploadPayload({
-      source: "claude_code",
       cliVersion: CLI_VERSION,
       daily: summary.daily,
     });

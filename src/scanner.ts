@@ -17,7 +17,12 @@ import {
   type PermissionModeKey,
   type HookEventKey,
 } from "./redaction.js";
-import type { DailyAggregate, ScanSummary } from "./types.js";
+import type {
+  ClaudeCodeExtras,
+  DailyAggregate,
+  DailyShard,
+  ScanSummary,
+} from "./types.js";
 
 const CLAUDE_PROJECTS_DIR = join(homedir(), ".claude", "projects");
 
@@ -168,7 +173,6 @@ export async function scanClaudeCodeDir(rootDir: string): Promise<ScanSummary> {
   }
 
   return {
-    source: "claude_code",
     daily,
     firstDate: daily[0]!.date,
     lastDate: daily[daily.length - 1]!.date,
@@ -179,6 +183,13 @@ export async function scanClaudeCodeDir(rootDir: string): Promise<ScanSummary> {
 
 type SessionWindow = { firstMs: number; lastMs: number };
 
+type ShardTokens = {
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens: number;
+  cacheWriteTokens: number;
+};
+
 type MutableDay = {
   date: string;
   inputTokens: number;
@@ -186,6 +197,11 @@ type MutableDay = {
   cacheReadTokens: number;
   cacheWriteTokens: number;
   sessions: Map<string, SessionWindow>;
+  /** Per-model token precision for the v5 wire format. Day-level totals
+   *  above are the sum of these; both are kept so existing CLI consumers
+   *  (reveal banner, `emptySummary` check) can read rolled fields without
+   *  re-iterating, while the wire builder reads per-model from here. */
+  tokensByModel: Map<string, ShardTokens>;
   // Per-record assistant/tool counters are NOT stored here — they're
   // derivable as `sumMap(stopReasons)` and `sumMap(tools)` respectively.
   models: Map<string, number>;
@@ -227,6 +243,7 @@ function makeDay(date: string): MutableDay {
     cacheReadTokens: 0,
     cacheWriteTokens: 0,
     sessions: new Map<string, SessionWindow>(),
+    tokensByModel: new Map<string, ShardTokens>(),
     models: new Map<string, number>(),
     tools: new Map<ToolKey, number>(),
     stopReasons: new Map<StopReasonKey, number>(),
@@ -269,20 +286,79 @@ function finalizeDay(d: MutableDay): DailyAggregate {
   const permissionModeChanges = sumMap(d.permissionModes);
   const skillInvocations = sumMap(d.skills);
   const subagentInvocations = sumMap(d.subagentTypes);
-
   const { p50, p95 } = percentiles(d.latenciesMs);
 
+  // Build per-(tool, model) shards from the precise per-model token map.
+  // Counters that aren't tracked per-model (assistantMessages, toolCalls,
+  // toolErrors, sessions, latency percentiles, claudeCodeExtras) land on
+  // the highest-token shard so the day's totals match `sumShards(...)`
+  // on the server's anti-cheat path. Other shards carry their precise
+  // tokens with zeroed counters — accurate for pricing, approximate for
+  // forensic per-model attribution of activity.
+  const shards: DailyShard[] = [];
+  let primaryModel = "";
+  let primaryTokens = -1;
+  for (const [model, t] of d.tokensByModel.entries()) {
+    const totalForModel =
+      t.inputTokens + t.outputTokens + t.cacheReadTokens + t.cacheWriteTokens;
+    if (totalForModel > primaryTokens) {
+      primaryTokens = totalForModel;
+      primaryModel = model;
+    }
+    shards.push({
+      tool: "claude-code",
+      model,
+      inputTokens: t.inputTokens,
+      outputTokens: t.outputTokens,
+      cacheReadTokens: t.cacheReadTokens,
+      cacheWriteTokens: t.cacheWriteTokens,
+      sessions: 0,
+      assistantMessages: 0,
+      toolCalls: 0,
+      toolErrors: 0,
+      responseLatencyMsP50: 0,
+      responseLatencyMsP95: 0,
+    });
+  }
+
+  if (shards.length > 0) {
+    const primary = shards.find((s) => s.model === primaryModel);
+    // Branch covered by the `shards.length > 0` guard — the model we just
+    // recorded as primary above is in the array we built from the same map.
+    if (primary) {
+      primary.sessions = d.sessions.size;
+      primary.assistantMessages = assistantMessages;
+      primary.toolCalls = toolCalls;
+      primary.toolErrors = d.toolErrors;
+      primary.responseLatencyMsP50 = p50;
+      primary.responseLatencyMsP95 = p95;
+      const extras: ClaudeCodeExtras = {
+        toolUseBreakdown: shareMap(d.tools, toolCalls),
+        stopReasonBreakdown: shareMap(d.stopReasons, assistantMessages),
+        permissionModeBreakdown: shareMap(
+          d.permissionModes,
+          permissionModeChanges
+        ),
+        hookEventCounts: Object.fromEntries(d.hookEvents),
+        hookErrors: d.hookErrors,
+        skillBreakdown: shareMap(d.skills, skillInvocations),
+        subagentTypeBreakdown: shareMap(d.subagentTypes, subagentInvocations),
+        skillsUsed: d.skillsSeen.size,
+        subagentTypesUsed: d.subagentTypesSeen.size,
+        mcpServersUsed: d.mcpServers.size,
+        sidechainMessages: d.sidechainMessages,
+      };
+      primary.claudeCodeExtras = extras;
+    }
+  }
+
   return {
-    source: "claude_code",
     date: d.date,
     inputTokens: d.inputTokens,
     outputTokens: d.outputTokens,
     cacheReadTokens: d.cacheReadTokens,
     cacheWriteTokens: d.cacheWriteTokens,
     sessions: d.sessions.size,
-    assistantMessages,
-    toolCalls,
-    toolErrors: d.toolErrors,
     totalActiveMinutes,
     longestSessionMinutes: longest,
     filesTouched: d.touchedPaths.size,
@@ -291,25 +367,12 @@ function finalizeDay(d: MutableDay): DailyAggregate {
     // for the entire publish.
     linesAdded: Math.min(d.linesAdded, MAX_LINES_PER_DAY),
     linesRemoved: Math.min(d.linesRemoved, MAX_LINES_PER_DAY),
-    hookErrors: d.hookErrors,
-    responseLatencyMsP50: p50,
-    responseLatencyMsP95: p95,
     projectsActive: d.cwds.size,
     gitBranchesActive: d.gitBranches.size,
-    mcpServersUsed: d.mcpServers.size,
-    sidechainMessages: d.sidechainMessages,
-    skillsUsed: d.skillsSeen.size,
-    subagentTypesUsed: d.subagentTypesSeen.size,
     worktreeEvents: d.worktreeEvents,
     fileHistorySnapshots: d.fileHistorySnapshots,
-    modelBreakdown: shareMap(d.models, assistantMessages),
-    toolUseBreakdown: shareMap(d.tools, toolCalls),
-    stopReasonBreakdown: shareMap(d.stopReasons, assistantMessages),
-    permissionModeBreakdown: shareMap(d.permissionModes, permissionModeChanges),
-    hookEventCounts: Object.fromEntries(d.hookEvents),
-    skillBreakdown: shareMap(d.skills, skillInvocations),
-    subagentTypeBreakdown: shareMap(d.subagentTypes, subagentInvocations),
     hourHistogramLocal: d.hourHistogramLocal.slice(),
+    shards,
   };
 }
 
@@ -506,11 +569,30 @@ function ingestAssistant(
   if (rec.isSidechain === true) day.sidechainMessages += 1;
 
   const usage = rec.message?.usage;
+  const model = normalizeModelKey(rec.message?.model);
   if (usage) {
-    day.inputTokens += usage.input_tokens ?? 0;
-    day.outputTokens += usage.output_tokens ?? 0;
-    day.cacheReadTokens += usage.cache_read_input_tokens ?? 0;
-    day.cacheWriteTokens += usage.cache_creation_input_tokens ?? 0;
+    const inputTokens = usage.input_tokens ?? 0;
+    const outputTokens = usage.output_tokens ?? 0;
+    const cacheReadTokens = usage.cache_read_input_tokens ?? 0;
+    const cacheWriteTokens = usage.cache_creation_input_tokens ?? 0;
+    day.inputTokens += inputTokens;
+    day.outputTokens += outputTokens;
+    day.cacheReadTokens += cacheReadTokens;
+    day.cacheWriteTokens += cacheWriteTokens;
+    let shard = day.tokensByModel.get(model);
+    if (!shard) {
+      shard = {
+        inputTokens: 0,
+        outputTokens: 0,
+        cacheReadTokens: 0,
+        cacheWriteTokens: 0,
+      };
+      day.tokensByModel.set(model, shard);
+    }
+    shard.inputTokens += inputTokens;
+    shard.outputTokens += outputTokens;
+    shard.cacheReadTokens += cacheReadTokens;
+    shard.cacheWriteTokens += cacheWriteTokens;
   }
 
   if (ts !== null && rec.sessionId) {
@@ -524,7 +606,6 @@ function ingestAssistant(
 
   ingestSourceContext(day, rec);
 
-  const model = normalizeModelKey(rec.message?.model);
   day.models.set(model, (day.models.get(model) ?? 0) + 1);
 
   incrementMap(day.stopReasons, normalizeStopReason(rec.message?.stop_reason));
@@ -766,7 +847,6 @@ async function collectJsonlFiles(root: string): Promise<string[]> {
 
 function emptySummary(): ScanSummary {
   return {
-    source: "claude_code",
     daily: [],
     firstDate: null,
     lastDate: null,

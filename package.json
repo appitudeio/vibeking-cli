@@ -1,6 +1,6 @@
 {
   "name": "vibeking",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "The leaderboard for vibe coders. Scan your Claude Code burn, claim your title, defend the crown.",
   "type": "module",
   "bin": {

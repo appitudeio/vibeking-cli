@@ -4,10 +4,11 @@ import { dirname, join } from "node:path";
 import { scanClaudeCodeDir } from "../scanner.js";
 import { buildUploadPayload } from "../redaction.js";
 
-// Trust anchor: scanner + buildUploadPayload must produce a byte-stable
-// payload for known fixture data. If a refactor changes the wire format,
-// this test fails loudly — independent of whatever is in ~/.claude/projects
-// on the dev machine.
+// Trust anchor: scanner + buildUploadPayload must produce a stable wire
+// payload for known fixture data. The full shape is locked in via vitest
+// `toMatchSnapshot` (the .snap file is the byte-stable reference); the
+// structural checks below pin the load-bearing invariants in the test
+// body so a snapshot drift is debuggable without diffing the .snap.
 //
 // vitest.setup.ts pins TZ=UTC so the local-hour histogram is deterministic
 // on every entry point.
@@ -29,139 +30,35 @@ describe("upload payload snapshot (fixture → wire format)", () => {
     vi.useRealTimers();
   });
 
-  it("produces the exact expected payload from the synthetic fixture", async () => {
+  it("produces a stable v5 payload from the synthetic fixture", async () => {
     const summary = await scanClaudeCodeDir(FIXTURE_DIR);
     const payload = buildUploadPayload({
-      source: "claude_code",
       cliVersion: "0.0.0-test",
       daily: summary.daily,
     });
 
-    expect(payload).toEqual({
-      schemaVersion: 4,
-      source: "claude_code",
-      cliVersion: "0.0.0-test",
-      scannedAt: "2026-01-20T12:00:00.000Z",
-      daily: [
-        {
-          date: "2026-01-15",
-          inputTokens: 310,
-          outputTokens: 620,
-          cacheReadTokens: 155,
-          cacheWriteTokens: 77,
-          sessions: 2,
-          assistantMessages: 4,
-          toolCalls: 5,
-          toolErrors: 1,
-          totalActiveMinutes: 7,
-          longestSessionMinutes: 5,
-          filesTouched: 3,
-          linesAdded: 3,
-          linesRemoved: 0,
-          hookErrors: 1,
-          responseLatencyMsP50: 30000,
-          responseLatencyMsP95: 90000,
-          projectsActive: 2,
-          gitBranchesActive: 2,
-          mcpServersUsed: 0,
-          sidechainMessages: 1,
-          skillsUsed: 0,
-          subagentTypesUsed: 0,
-          worktreeEvents: 1,
-          fileHistorySnapshots: 0,
-          modelBreakdown: {
-            "claude-opus-4-7": 0.5,
-            "claude-sonnet-4-6": 0.25,
-            synthetic: 0.25,
-          },
-          toolUseBreakdown: {
-            Bash: 0.2,
-            Read: 0.4,
-            Grep: 0.2,
-            Write: 0.2,
-          },
-          stopReasonBreakdown: {
-            end_turn: 0.5,
-            tool_use: 0.5,
-          },
-          permissionModeBreakdown: {
-            plan: 1,
-          },
-          hookEventCounts: {
-            PreToolUse: 1,
-            PostToolUse: 1,
-          },
-          skillBreakdown: {},
-          subagentTypeBreakdown: {},
-          hourHistogramLocal: [
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0,
-            0, 0,
-          ],
-        },
-        {
-          date: "2026-01-16",
-          inputTokens: 440,
-          outputTokens: 880,
-          cacheReadTokens: 220,
-          cacheWriteTokens: 112,
-          sessions: 2,
-          assistantMessages: 3,
-          toolCalls: 7,
-          toolErrors: 0,
-          totalActiveMinutes: 30,
-          longestSessionMinutes: 30,
-          filesTouched: 1,
-          linesAdded: 0,
-          linesRemoved: 2,
-          hookErrors: 0,
-          responseLatencyMsP50: 30000,
-          responseLatencyMsP95: 30000,
-          projectsActive: 1,
-          gitBranchesActive: 1,
-          mcpServersUsed: 1,
-          sidechainMessages: 0,
-          skillsUsed: 2,
-          subagentTypesUsed: 2,
-          worktreeEvents: 1,
-          fileHistorySnapshots: 1,
-          modelBreakdown: {
-            "claude-opus-4-7": 0.3333,
-            "claude-sonnet-4-6": 0.6667,
-          },
-          toolUseBreakdown: {
-            Edit: 0.1429,
-            Bash: 0.1429,
-            mcp: 0.1429,
-            Skill: 0.2857,
-            Task: 0.1429,
-            Agent: 0.1429,
-          },
-          stopReasonBreakdown: {
-            tool_use: 0.3333,
-            max_tokens: 0.3333,
-            end_turn: 0.3333,
-          },
-          permissionModeBreakdown: {
-            acceptEdits: 1,
-          },
-          hookEventCounts: {
-            SessionStart: 1,
-          },
-          skillBreakdown: {
-            "db-query": 0.5,
-            other: 0.5,
-          },
-          subagentTypeBreakdown: {
-            "general-purpose": 0.5,
-            other: 0.5,
-          },
-          hourHistogramLocal: [
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0,
-            0, 0,
-          ],
-        },
-      ],
-    });
+    // Byte-stable reference. Update with `pnpm test -u` after intentional
+    // wire-format or scanner changes.
+    expect(payload).toMatchSnapshot();
+
+    // Structural invariants — fast to read in CI failures without diffing
+    // the .snap blob.
+    expect(payload.schemaVersion).toBe(5);
+    expect(payload.cliVersion).toBe("0.0.0-test");
+    expect(payload.scannedAt).toBe("2026-01-20T12:00:00.000Z");
+    expect(payload.daily.map((d) => d.date)).toEqual([
+      "2026-01-15",
+      "2026-01-16",
+    ]);
+    // Every day has at least one shard, and every CC shard's extras attach
+    // to exactly one (highest-token) shard per day.
+    for (const day of payload.daily) {
+      expect(day.shards.length).toBeGreaterThan(0);
+      const ccWithExtras = day.shards.filter(
+        (s) => s.tool === "claude-code" && "claudeCodeExtras" in s && s.claudeCodeExtras
+      );
+      expect(ccWithExtras.length).toBe(1);
+    }
   });
 
   // The fixture's Skill `input.args` and Task/Agent `input.prompt` carry
@@ -173,7 +70,6 @@ describe("upload payload snapshot (fixture → wire format)", () => {
   it("never includes Skill args or Task/Agent prompt content in the payload", async () => {
     const summary = await scanClaudeCodeDir(FIXTURE_DIR);
     const payload = buildUploadPayload({
-      source: "claude_code",
       cliVersion: "0.0.0-test",
       daily: summary.daily,
     });

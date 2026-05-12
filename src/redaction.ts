@@ -1,6 +1,10 @@
 import * as v from "valibot";
 import { KNOWN_MARKETPLACE_INVOCATIONS } from "./generated/marketplace-tokens.js";
-import type { DailyAggregate, SourceType } from "./types.js";
+import {
+  SUPPORTED_TOOLS,
+  type DailyAggregate,
+  type Tool,
+} from "./types.js";
 
 // ────────────────────────────────────────────────────────────
 // Skill / subagent_type classification (the trust gate)
@@ -36,7 +40,7 @@ import type { DailyAggregate, SourceType } from "./types.js";
  * that the server's schema then rejects (or vice versa). When changing
  * either side, update both in the same PR / cross-repo commit. The same
  * applies to `BUILTIN_SUBAGENT_TYPES`, `MAX_LINES_PER_DAY`, all `NAMED_*`
- * allowlists, and `MAX_TOKENS_PER_FIELD`. */
+ * allowlists, `MAX_TOKENS_PER_FIELD`, and `SUPPORTED_TOOLS`. */
 const CURATED_PUBLIC_INVOCATIONS = [
   // db-query: popular DB query helper. Real public plugin; not yet
   // indexed at claudemarketplaces.com.
@@ -112,12 +116,17 @@ export function isIsoDate(s: string): boolean {
 }
 
 // ────────────────────────────────────────────────────────────
-// UploadPayloadSchema is the SINGLE source of truth for what the
-// CLI is allowed to send. Both the CLI (commands/inspectUpload + publish)
-// and the server's scan route parse against this exact schema.
+// UploadPayloadSchema (wire format v5) — single source of truth for what
+// the CLI is allowed to send. Both the CLI (commands/inspectUpload +
+// publish) and the server's scan route parse against this exact schema.
+//
+// v5 introduces per-(tool, model) shards inside each day. The CLI ships
+// today only with a Claude Code scanner; the other tools in
+// SUPPORTED_TOOLS are accepted by the wire format so their scanners can
+// plug in without a schema bump when shipped.
 //
 // Any field added here must also be:
-//   - rendered by `inspect-upload` (so users can verify it before publish)
+//   - rendered by `inspect-upload` (so users can verify before publish)
 //   - covered by tests in redaction.test.ts
 //   - reflected in the privacy text (help.ts, README.md, inspectUpload.ts)
 // ────────────────────────────────────────────────────────────
@@ -141,10 +150,6 @@ const MAX_TOKENS_PER_FIELD = 1e13;
 export const MAX_LINES_PER_DAY = 100_000_000;
 
 // ── Closed allowlists, single source of truth ───────────────
-// Each tuple is the canonical list. Scanner imports it and builds its
-// runtime Sets from the same constant. Schema `v.picklist`s are derived
-// from `[...NAMED, ...buckets]` so drift between scanner and schema is
-// impossible by construction.
 
 /** Built-in Claude Code tool names. MCP tools are NOT named here — they're
  * collapsed to the `mcp` bucket by the scanner so installed-server names
@@ -186,14 +191,8 @@ export const NAMED_STOP_REASONS = [
 ] as const;
 const STOP_REASON_KEYS = [...NAMED_STOP_REASONS, "none", "other"] as const;
 
-/** Claude Code permission modes.
- *   - `default`, `acceptEdits`, `plan`, `bypassPermissions` are the
- *     documented modes from Claude Code's settings UI.
- *   - `auto` and `bubble` are real values observed in production JSONL
- *     (40k+ occurrences across this codebase's sample). Likely added in
- *     Claude Code 2.x; included so the scanner doesn't bucket the
- *     majority of toggles into "other". Remove if upstream confirms
- *     these are dev-only sentinels. */
+/** Claude Code permission modes. Real values observed in production JSONL;
+ *  `auto` and `bubble` likely added in Claude Code 2.x. */
 export const NAMED_PERMISSION_MODES = [
   "default",
   "acceptEdits",
@@ -230,30 +229,8 @@ export type HookEventKey = (typeof HOOK_EVENT_KEYS)[number];
 
 const ShareValueSchema = v.pipe(v.number(), v.minValue(0), v.maxValue(1));
 
-const ModelBreakdownSchema = v.pipe(
-  v.record(
-    v.pipe(
-      v.string(),
-      v.regex(
-        MODEL_KEY_REGEX,
-        "model keys must match /^[a-z0-9._:/-]{1,64}$/i — prompt text and file paths cannot be used as keys"
-      )
-    ),
-    ShareValueSchema
-  ),
-  v.check(
-    (obj) => Object.keys(obj).length <= 32,
-    "modelBreakdown supports at most 32 keys per day"
-  )
-);
-
 const ToolUseBreakdownSchema = v.record(ToolKeySchema, ShareValueSchema);
-
-const StopReasonBreakdownSchema = v.record(
-  StopReasonKeySchema,
-  ShareValueSchema
-);
-
+const StopReasonBreakdownSchema = v.record(StopReasonKeySchema, ShareValueSchema);
 const PermissionModeBreakdownSchema = v.record(
   PermissionModeKeySchema,
   ShareValueSchema
@@ -323,10 +300,29 @@ const DistinctCountSchema = v.pipe(
 
 const HookEventCountsSchema = v.record(HookEventKeySchema, CountSchema);
 
-const DailyAggregateSchema = v.strictObject({
-  date: v.pipe(
+// Claude-Code-specific telemetry. Lives inside a shard with tool="claude-code".
+// Other tools may add their own optional `<tool>Extras` block in future.
+const ClaudeCodeExtrasSchema = v.strictObject({
+  toolUseBreakdown: ToolUseBreakdownSchema,
+  stopReasonBreakdown: StopReasonBreakdownSchema,
+  permissionModeBreakdown: PermissionModeBreakdownSchema,
+  hookEventCounts: HookEventCountsSchema,
+  hookErrors: CountSchema,
+  skillBreakdown: SkillBreakdownSchema,
+  subagentTypeBreakdown: SubagentTypeBreakdownSchema,
+  skillsUsed: DistinctCountSchema,
+  subagentTypesUsed: DistinctCountSchema,
+  mcpServersUsed: DistinctCountSchema,
+  sidechainMessages: CountSchema,
+});
+
+const SharedShardFields = {
+  model: v.pipe(
     v.string(),
-    v.check(isIsoDate, "date must be a real YYYY-MM-DD calendar date")
+    v.regex(
+      MODEL_KEY_REGEX,
+      "model must match /^[a-z0-9._:/-]{1,64}$/i — prompt text and file paths cannot be used as keys"
+    )
   ),
   inputTokens: v.pipe(
     v.number(),
@@ -352,102 +348,187 @@ const DailyAggregateSchema = v.strictObject({
     v.minValue(0),
     v.maxValue(MAX_TOKENS_PER_FIELD)
   ),
-  sessions: v.pipe(v.number(), v.integer(), v.minValue(0), v.maxValue(1_000_000)),
+  sessions: v.pipe(
+    v.number(),
+    v.integer(),
+    v.minValue(0),
+    v.maxValue(1_000_000)
+  ),
   assistantMessages: CountSchema,
   toolCalls: CountSchema,
   toolErrors: CountSchema,
-  totalActiveMinutes: MinutesPerDaySchema,
-  longestSessionMinutes: MinutesPerDaySchema,
-  filesTouched: CountSchema,
-  linesAdded: LineCountSchema,
-  linesRemoved: LineCountSchema,
-  hookErrors: CountSchema,
   responseLatencyMsP50: LatencyMsSchema,
   responseLatencyMsP95: LatencyMsSchema,
-  projectsActive: DistinctCountSchema,
-  gitBranchesActive: DistinctCountSchema,
-  mcpServersUsed: DistinctCountSchema,
-  sidechainMessages: CountSchema,
-  skillsUsed: DistinctCountSchema,
-  subagentTypesUsed: DistinctCountSchema,
-  worktreeEvents: CountSchema,
-  fileHistorySnapshots: CountSchema,
-  modelBreakdown: ModelBreakdownSchema,
-  toolUseBreakdown: ToolUseBreakdownSchema,
-  stopReasonBreakdown: StopReasonBreakdownSchema,
-  permissionModeBreakdown: PermissionModeBreakdownSchema,
-  hookEventCounts: HookEventCountsSchema,
-  skillBreakdown: SkillBreakdownSchema,
-  subagentTypeBreakdown: SubagentTypeBreakdownSchema,
-  hourHistogramLocal: HourHistogramSchema,
-}); // strictObject rejects unknown per-day keys (leaked file paths, etc.)
+};
 
-export const UploadPayloadSchema = v.strictObject({
-  schemaVersion: v.literal(4),
-  source: v.literal("claude_code"),
-  cliVersion: v.pipe(
-    v.string(),
-    v.regex(CLI_VERSION_REGEX, "cliVersion must be semver-ish")
-  ),
-  scannedAt: v.pipe(v.string(), v.isoTimestamp()),
-  daily: v.pipe(v.array(DailyAggregateSchema), v.maxLength(366)),
-}); // strictObject rejects unknown top-level keys (leaked prompts, etc.)
+const ClaudeCodeShardSchema = v.strictObject({
+  tool: v.literal("claude-code"),
+  ...SharedShardFields,
+  claudeCodeExtras: v.optional(ClaudeCodeExtrasSchema),
+});
+
+// Non-CC tools never carry `claudeCodeExtras`. Once their scanners ship,
+// each may grow its own optional `<tool>Extras` block.
+const NonClaudeCodeShardSchema = v.strictObject({
+  tool: v.picklist(SUPPORTED_TOOLS.filter((t) => t !== "claude-code")),
+  ...SharedShardFields,
+});
+
+const DailyShardSchema = v.variant("tool", [
+  ClaudeCodeShardSchema,
+  NonClaudeCodeShardSchema,
+]);
+
+const DailyAggregateSchema = v.pipe(
+  v.strictObject({
+    date: v.pipe(
+      v.string(),
+      v.check(isIsoDate, "date must be a real YYYY-MM-DD calendar date")
+    ),
+    shards: v.pipe(
+      v.array(DailyShardSchema),
+      v.minLength(1, "at least one shard required per day"),
+      v.maxLength(64, "no day realistically spans more than 64 (tool, model) pairs"),
+      v.check(
+        (arr) =>
+          new Set(arr.map((s) => `${s.tool} ${s.model}`)).size === arr.length,
+        "shards must be unique by (tool, model)"
+      )
+    ),
+    totalActiveMinutes: MinutesPerDaySchema,
+    longestSessionMinutes: MinutesPerDaySchema,
+    filesTouched: CountSchema,
+    linesAdded: LineCountSchema,
+    linesRemoved: LineCountSchema,
+    projectsActive: DistinctCountSchema,
+    gitBranchesActive: DistinctCountSchema,
+    worktreeEvents: CountSchema,
+    fileHistorySnapshots: CountSchema,
+    hourHistogramLocal: HourHistogramSchema,
+  }),
+  v.check(
+    (day) => {
+      // Cap rolled-day tokens at MAX_TOKENS_PER_FIELD. Per-shard cap alone
+      // allows 64 shards × 1e13 = 6.4e14 per field, which overflows
+      // Number.MAX_SAFE_INTEGER once aggregated across 366 days. Mirrors
+      // the server's identical check.
+      let i = 0, o = 0, cr = 0, cw = 0;
+      for (const s of day.shards) {
+        i += s.inputTokens;
+        o += s.outputTokens;
+        cr += s.cacheReadTokens;
+        cw += s.cacheWriteTokens;
+      }
+      return (
+        i <= MAX_TOKENS_PER_FIELD &&
+        o <= MAX_TOKENS_PER_FIELD &&
+        cr <= MAX_TOKENS_PER_FIELD &&
+        cw <= MAX_TOKENS_PER_FIELD
+      );
+    },
+    `rolled day tokens must not exceed ${MAX_TOKENS_PER_FIELD} per field`
+  )
+);
+
+export const UploadPayloadSchema = v.pipe(
+  v.strictObject({
+    schemaVersion: v.literal(5),
+    cliVersion: v.pipe(
+      v.string(),
+      v.regex(CLI_VERSION_REGEX, "cliVersion must be semver-ish")
+    ),
+    scannedAt: v.pipe(v.string(), v.isoTimestamp()),
+    daily: v.pipe(
+      v.array(DailyAggregateSchema),
+      v.minLength(1, "payload must include at least one day"),
+      v.maxLength(366),
+      v.check(
+        (arr) => new Set(arr.map((d) => d.date)).size === arr.length,
+        "daily entries must have unique dates"
+      )
+    ),
+  })
+);
 
 export type UploadPayload = v.InferOutput<typeof UploadPayloadSchema>;
 
+/** Wire-format shard shape — exported for the snapshot tests and the
+ *  inspect-upload command. */
+export type WireDailyShard = v.InferOutput<typeof DailyShardSchema>;
+
 /**
- * Build the upload payload from local aggregates. This is the ONE function
- * that turns local data into something uploadable.
+ * Build the upload payload from local aggregates. Turns the CLI's
+ * internal `DailyAggregate` (which carries both rolled fields for CLI
+ * consumers AND `shards[]` for the wire) into a strictly-validated
+ * v5 envelope. Parse-validates before returning so callers cannot leak
+ * — local data violating the schema throws at the source.
  */
 export function buildUploadPayload(args: {
-  source: SourceType;
   cliVersion: string;
   daily: DailyAggregate[];
 }): UploadPayload {
   const payload = {
-    schemaVersion: 4 as const,
-    source: args.source,
+    schemaVersion: 5 as const,
     cliVersion: args.cliVersion,
     scannedAt: new Date().toISOString(),
     daily: args.daily.map((d) => ({
       date: d.date,
-      inputTokens: d.inputTokens,
-      outputTokens: d.outputTokens,
-      cacheReadTokens: d.cacheReadTokens,
-      cacheWriteTokens: d.cacheWriteTokens,
-      sessions: d.sessions,
-      assistantMessages: d.assistantMessages,
-      toolCalls: d.toolCalls,
-      toolErrors: d.toolErrors,
+      shards: d.shards.map((s) => cloneShard(s)),
       totalActiveMinutes: d.totalActiveMinutes,
       longestSessionMinutes: d.longestSessionMinutes,
       filesTouched: d.filesTouched,
       linesAdded: d.linesAdded,
       linesRemoved: d.linesRemoved,
-      hookErrors: d.hookErrors,
-      responseLatencyMsP50: d.responseLatencyMsP50,
-      responseLatencyMsP95: d.responseLatencyMsP95,
       projectsActive: d.projectsActive,
       gitBranchesActive: d.gitBranchesActive,
-      mcpServersUsed: d.mcpServersUsed,
-      sidechainMessages: d.sidechainMessages,
-      skillsUsed: d.skillsUsed,
-      subagentTypesUsed: d.subagentTypesUsed,
       worktreeEvents: d.worktreeEvents,
       fileHistorySnapshots: d.fileHistorySnapshots,
-      modelBreakdown: { ...d.modelBreakdown },
-      toolUseBreakdown: { ...d.toolUseBreakdown },
-      stopReasonBreakdown: { ...d.stopReasonBreakdown },
-      permissionModeBreakdown: { ...d.permissionModeBreakdown },
-      hookEventCounts: { ...d.hookEventCounts },
-      skillBreakdown: { ...d.skillBreakdown },
-      subagentTypeBreakdown: { ...d.subagentTypeBreakdown },
       hourHistogramLocal: d.hourHistogramLocal.slice(),
     })),
   };
-
-  // Parse-validate before returning, so callers cannot leak. If the local
-  // data violates the schema (e.g. a model name with a colon-prefix that
-  // doesn't match), we throw at the source rather than upload garbage.
   return v.parse(UploadPayloadSchema, payload);
+}
+
+function cloneShard(s: DailyAggregate["shards"][number]): WireDailyShard {
+  const base = {
+    tool: s.tool,
+    model: s.model,
+    inputTokens: s.inputTokens,
+    outputTokens: s.outputTokens,
+    cacheReadTokens: s.cacheReadTokens,
+    cacheWriteTokens: s.cacheWriteTokens,
+    sessions: s.sessions,
+    assistantMessages: s.assistantMessages,
+    toolCalls: s.toolCalls,
+    toolErrors: s.toolErrors,
+    responseLatencyMsP50: s.responseLatencyMsP50,
+    responseLatencyMsP95: s.responseLatencyMsP95,
+  };
+  if (s.tool === "claude-code" && s.claudeCodeExtras) {
+    return {
+      ...base,
+      tool: "claude-code",
+      claudeCodeExtras: {
+        toolUseBreakdown: { ...s.claudeCodeExtras.toolUseBreakdown },
+        stopReasonBreakdown: { ...s.claudeCodeExtras.stopReasonBreakdown },
+        permissionModeBreakdown: {
+          ...s.claudeCodeExtras.permissionModeBreakdown,
+        },
+        hookEventCounts: { ...s.claudeCodeExtras.hookEventCounts },
+        hookErrors: s.claudeCodeExtras.hookErrors,
+        skillBreakdown: { ...s.claudeCodeExtras.skillBreakdown },
+        subagentTypeBreakdown: {
+          ...s.claudeCodeExtras.subagentTypeBreakdown,
+        },
+        skillsUsed: s.claudeCodeExtras.skillsUsed,
+        subagentTypesUsed: s.claudeCodeExtras.subagentTypesUsed,
+        mcpServersUsed: s.claudeCodeExtras.mcpServersUsed,
+        sidechainMessages: s.claudeCodeExtras.sidechainMessages,
+      },
+    };
+  }
+  // Non-CC tool (or CC with no extras) — narrow to the no-extras variant.
+  // Casting via the discriminant is the simplest way to satisfy the
+  // discriminated union without restructuring `base`.
+  return { ...base, tool: s.tool as Exclude<Tool, "claude-code"> };
 }
