@@ -1,0 +1,30 @@
+name: ci
+
+# Lint + typecheck + test + build on every PR and every push to main.
+# Mirrors the local `pnpm` scripts in package.json — anything green here
+# is expected to be green for a contributor running them locally.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      # pnpm version is read from package.json `packageManager` field;
+      # passing `version:` here additionally errors as of action-setup@v5+
+      # ("Multiple versions of pnpm specified"). Single source of truth.
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm build

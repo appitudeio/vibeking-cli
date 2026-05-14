@@ -1,0 +1,42 @@
+name: verify-marketplace-sync
+
+# Guards against hand-edits to src/generated/marketplace-tokens.ts that would
+# silently expand the trust-gate allowlist. On every PR + push to main we
+# re-run the sync script against the live sitemap and fail if the committed
+# file diverges. A reviewer who sees a diff in the generated file (e.g. a
+# new public-marketplace plugin) can still merge — they just need to have
+# run `pnpm sync-marketplace` in their branch so the diff is genuine and
+# reproducible.
+
+on:
+  pull_request:
+    paths:
+      - "src/generated/marketplace-tokens.ts"
+      - "scripts/sync-marketplace.ts"
+      - "src/redaction.ts"
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      # pnpm version is read from package.json `packageManager` field;
+      # passing `version:` here additionally errors as of action-setup@v5+
+      # ("Multiple versions of pnpm specified"). Single source of truth.
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Re-sync from live sitemap
+        run: pnpm sync-marketplace
+      - name: Fail if the committed file diverges
+        run: |
+          if ! git diff --exit-code src/generated/marketplace-tokens.ts; then
+            echo "::error::src/generated/marketplace-tokens.ts is out of sync with claudemarketplaces.com/sitemap.xml. Run \`pnpm sync-marketplace\` locally and commit the result."
+            exit 1
+          fi

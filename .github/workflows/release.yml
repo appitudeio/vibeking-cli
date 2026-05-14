@@ -1,0 +1,124 @@
+name: release
+
+# Publishes to npm when package.json's `version` changes on main.
+# Workflow: bump version in package.json → merge to main → this:
+#   1. reads the version from package.json
+#   2. skips if tag v<version> already exists (idempotent — a package.json
+#      change WITHOUT a version bump is a safe no-op)
+#   3. runs the full check suite (lint + typecheck + test + build)
+#   4. publishes to npm with a signed provenance attestation
+#      ("Built and signed on GitHub Actions" badge linking the commit)
+#   5. creates the git tag + a GitHub Release with auto-generated notes
+#
+# Tokenless: publishes via npm OIDC trusted publishing — no NPM_TOKEN
+# secret to store, rotate, or leak. CI mints a short-lived OIDC token
+# from the `id-token: write` permission; npm trusts it because the repo
+# + this workflow are registered as a trusted publisher.
+#
+# ONE-TIME SETUP:
+#   1. Bootstrap (the `vibeking` package must exist before a trusted
+#      publisher can be attached — chicken/egg for a brand-new name).
+#      Publish v0.1.0 once manually from a maintainer's machine:
+#        npm login && npm publish      # prepublishOnly runs build + test
+#      (No provenance on this one manual publish — that's fine; every
+#       release after is provenance-signed via this workflow.)
+#   2. npmjs.com → the `vibeking` package → Settings → Trusted Publisher
+#      → GitHub Actions: appitudeio/vibeking-cli, workflow `release.yml`.
+#   3. Repo Settings → Actions → General → Workflow permissions →
+#      "Read and write permissions" (lets the workflow push the tag).
+#
+# Requires a PUBLIC repo — npm rejects --provenance from private repos.
+
+on:
+  push:
+    branches: [main]
+    paths: ["package.json"]
+  workflow_dispatch:
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # push the git tag + create the GitHub Release
+      id-token: write # sign the npm provenance attestation
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0 # full history so release notes can diff from last tag
+
+      - name: Read version from package.json
+        id: version
+        run: |
+          VERSION=$(jq -r '.version' package.json)
+          if [ -z "$VERSION" ] || [ "$VERSION" = "null" ]; then
+            echo "::error::No version field in package.json"
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Check if tag already exists
+        id: tag
+        run: |
+          if git rev-parse "v${{ steps.version.outputs.version }}" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::Tag v${{ steps.version.outputs.version }} exists — nothing to release."
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: pnpm/action-setup@v6
+        if: steps.tag.outputs.exists == 'false'
+      - uses: actions/setup-node@v6
+        if: steps.tag.outputs.exists == 'false'
+        with:
+          node-version: 20
+          cache: pnpm
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Install
+        if: steps.tag.outputs.exists == 'false'
+        run: pnpm install --frozen-lockfile
+
+      - name: Verify (lint + typecheck + test + build)
+        if: steps.tag.outputs.exists == 'false'
+        run: |
+          pnpm lint
+          pnpm typecheck
+          pnpm test
+          pnpm build
+
+      - name: Upgrade npm for OIDC trusted publishing
+        if: steps.tag.outputs.exists == 'false'
+        # Node 20 ships npm 10; tokenless OIDC publishing needs npm >= 11.5.
+        run: npm install -g npm@latest
+
+      - name: Publish to npm (tokenless OIDC + signed provenance)
+        if: steps.tag.outputs.exists == 'false'
+        # No NODE_AUTH_TOKEN: npm uses the GitHub OIDC identity (the
+        # id-token: write permission) against the configured trusted
+        # publisher. `npm publish` also re-runs prepublishOnly
+        # (build + test) — redundant with Verify above but a cheap,
+        # intentional safety net for manual publishes.
+        run: npm publish --provenance --access public
+
+      - name: Generate release notes
+        if: steps.tag.outputs.exists == 'false'
+        run: |
+          LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          if [ -z "$LAST_TAG" ]; then RANGE="HEAD"; else RANGE="$LAST_TAG..HEAD"; fi
+          COMMITS=$(git log "$RANGE" --pretty=format:"- %s (%h)" --no-merges)
+          [ -z "$COMMITS" ] && COMMITS="- v${{ steps.version.outputs.version }}"
+          {
+            echo "## vibeking ${{ steps.version.outputs.version }}"
+            echo
+            echo "$COMMITS"
+          } > release_notes.md
+
+      - name: Tag + GitHub Release
+        if: steps.tag.outputs.exists == 'false'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: vibeking ${{ steps.version.outputs.version }}
+          body_path: release_notes.md
