@@ -44,10 +44,17 @@ every release after is automated.
 ## Cutting a release (every time after bootstrap)
 
 ```bash
-npm version patch        # 0.1.0 → 0.1.1 (also creates a commit)
-#   or: npm version minor / npm version major
-git push                 # open a PR, merge to main
+pnpm release             # patch: 0.1.0 → 0.1.1
+#   pnpm release minor   # 0.1.0 → 0.2.0
+#   pnpm release major   # 0.1.0 → 1.0.0
+git push origin main     # → release.yml does the rest
 ```
+
+`pnpm release` bumps `package.json` and commits — **without** a local
+git tag. That matters: `release.yml` owns tagging, and its
+tag-existence check would *skip* the publish if the tag already existed
+locally. Never `npm version` directly (it makes a tag); always
+`pnpm release`.
 
 On merge, `release.yml`:
 

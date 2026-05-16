@@ -28,6 +28,7 @@
     "sync-marketplace": "tsx scripts/sync-marketplace.ts",
     "clean": "rm -rf dist *.tsbuildinfo",
     "pack:test": "pnpm build && rm -rf /tmp/vibeking-pack && mkdir -p /tmp/vibeking-pack && npm pack --pack-destination /tmp/vibeking-pack --silent && node scripts/print-pack-instructions.mjs",
+    "release": "node scripts/release.mjs",
     "prepublishOnly": "pnpm build && pnpm test"
   },
   "keywords": [
