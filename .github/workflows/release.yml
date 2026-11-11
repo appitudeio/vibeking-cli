@@ -1,12 +1,14 @@
 name: release
 
-# Publishes to npm when package.json's `version` changes on main.
+# Stages a publish to npm when package.json's `version` changes on main.
 # Workflow: bump version in package.json → merge to main → this:
 #   1. reads the version from package.json
 #   2. skips if tag v<version> already exists (idempotent — a package.json
 #      change WITHOUT a version bump is a safe no-op)
 #   3. runs the full check suite (lint + typecheck + test + build)
-#   4. publishes to npm with a signed provenance attestation
+#   4. stages the version on npm (`npm stage publish`) with a signed provenance
+#      attestation; it only becomes public once a maintainer runs
+#      `npm stage approve <stage-id>` (needs 2FA)
 #      ("Built and signed on GitHub Actions" badge linking the commit)
 #   5. creates the git tag + a GitHub Release with auto-generated notes
 #
@@ -88,19 +90,28 @@ jobs:
           pnpm test
           pnpm build
 
-      - name: Upgrade npm for OIDC trusted publishing
+      - name: Upgrade npm for OIDC trusted publishing and staged publishing
         if: steps.tag.outputs.exists == 'false'
-        # Node 20 ships npm 10; tokenless OIDC publishing needs npm >= 11.5.
-        run: npm install -g npm@latest
+        # Node 20 ships npm 10; tokenless OIDC publishing needs npm >= 11.5 and
+        # `npm stage` needs a recent npm (pinned, verified to have it).
+        run: npm install -g npm@11.19.0
 
-      - name: Publish to npm (tokenless OIDC + signed provenance)
+      - name: Stage publish to npm (tokenless OIDC + signed provenance)
         if: steps.tag.outputs.exists == 'false'
         # No NODE_AUTH_TOKEN: npm uses the GitHub OIDC identity (the
         # id-token: write permission) against the configured trusted
-        # publisher. `npm publish` also re-runs prepublishOnly
+        # publisher. `npm stage publish` also re-runs prepublishOnly
         # (build + test) — redundant with Verify above but a cheap,
         # intentional safety net for manual publishes.
-        run: npm publish --provenance --access public
+        run: npm stage publish --provenance --access public
+
+      - name: Note staged publish
+        if: steps.tag.outputs.exists == 'false'
+        run: |
+          PKG=$(node -p "require('./package.json').name")
+          MSG="Staged on npm - approve with: npm stage list $PKG then npm stage approve <stage-id> (needs 2FA)"
+          echo "$MSG"
+          echo "$MSG" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Generate release notes
         if: steps.tag.outputs.exists == 'false'
